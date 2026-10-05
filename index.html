@@ -190,6 +190,14 @@ html.fsl,html.fsl body{overflow:hidden}
 .zc.fs>.cpads{grid-auto-rows:1fr}
 .zc.fs .cpad{font-size:clamp(15px,2.6vw,26px)}
 .zc.fs .cpad small{font-size:clamp(10px,1.4vw,15px)}
+/* cue : préparation privée d'un instrument chez un invité, avant envoi au master */
+.cuebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cuest{flex:1 1 150px;min-width:0}
+.zone.cue{box-shadow:inset 0 0 0 2px var(--zc)}
+.zone.cue>.cuebar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + 40px);z-index:4;margin-inline:-6px;padding:8px;border:1px dashed var(--zc);border-radius:6px;background:color-mix(in srgb,var(--zc) 16%,var(--panel))}
+.zone.cue .zt span::after{content:" · CUE"}
+.wide{font-weight:inherit}
+@media (max-width:700px){.wide{display:none}}
 /* session à plusieurs */
 .nstat{margin-left:auto;text-align:right}
 .nrow{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
@@ -284,6 +292,12 @@ html.fsl,html.fsl body{overflow:hidden}
 
   <section class="zone zb">
   <h2><button class="zt" id="zt-b" aria-expanded="true"><span>BASSLINE</span><i aria-hidden="true"></i></button><div class="zv"><input type="range" id="zv-b" min="0" max="100" value="70" aria-label="Volume de la basse"><div class="zm" aria-hidden="true"><i id="zm-b"></i></div></div></h2>
+    <div class="cuebar" id="cue-b" hidden>
+      <button class="btn" id="cue-b-on">Cue : préparer la basse sans toucher au master</button>
+      <span class="lbl cuest" id="cue-b-st" role="status"></span>
+      <button class="btn primary" id="cue-b-send">Envoyer au master</button>
+      <button class="btn" id="cue-b-off">Quitter le cue</button>
+    </div>
   <div class="edrow">
     <label class="lbl" for="b-preset">Preset basse</label>
     <select class="sel psel" id="b-preset"></select>
@@ -401,6 +415,12 @@ html.fsl,html.fsl body{overflow:hidden}
 
   <section class="zone zy">
     <h2><button class="zt" id="zt-y" aria-expanded="true"><span>SYNTHÉ LEAD</span><i aria-hidden="true"></i></button><div class="zv"><input type="range" id="zv-y" min="0" max="100" value="70" aria-label="Volume du synthé"><div class="zm" aria-hidden="true"><i id="zm-y"></i></div></div></h2>
+    <div class="cuebar" id="cue-y" hidden>
+      <button class="btn" id="cue-y-on">Cue : préparer le synthé sans toucher au master</button>
+      <span class="lbl cuest" id="cue-y-st" role="status"></span>
+      <button class="btn primary" id="cue-y-send">Envoyer au master</button>
+      <button class="btn" id="cue-y-off">Quitter le cue</button>
+    </div>
     <div class="edrow">
       <label class="lbl" for="y-preset">Preset synthé</label>
       <select class="sel psel" id="y-preset"></select>
@@ -554,7 +574,13 @@ html.fsl,html.fsl body{overflow:hidden}
   </section>
 
   <section class="zone zd">
-    <h2><button class="zt" id="zt-d" aria-expanded="true"><span>RYTHMES · 8 PISTES</span><i aria-hidden="true"></i></button><div class="zv"><input type="range" id="zv-d" min="0" max="100" value="70" aria-label="Volume des rythmes"><div class="zm" aria-hidden="true"><i id="zm-d"></i></div></div></h2>
+    <h2><button class="zt" id="zt-d" aria-expanded="true"><span>RYTHMES<b class="wide"> · 8 PISTES</b></span><i aria-hidden="true"></i></button><div class="zv"><input type="range" id="zv-d" min="0" max="100" value="70" aria-label="Volume des rythmes"><div class="zm" aria-hidden="true"><i id="zm-d"></i></div></div></h2>
+    <div class="cuebar" id="cue-d" hidden>
+      <button class="btn" id="cue-d-on">Cue : préparer les rythmes sans toucher au master</button>
+      <span class="lbl cuest" id="cue-d-st" role="status"></span>
+      <button class="btn primary" id="cue-d-send">Envoyer au master</button>
+      <button class="btn" id="cue-d-off">Quitter le cue</button>
+    </div>
     <div class="edrow">
       <div class="seg" role="group" aria-label="Variation">
         <button class="btn" id="v-a">A</button>
@@ -692,6 +718,7 @@ function lrate(v){return Math.pow(2,(v-.5)*2)}
 var L={bars:2,sel:0,slots:[0,1,2].map(function(){return {vol:.8,start:0,rate:.5,mute:false,rev:false}})};
 var B={ftype:'lowpass',lfoT:'cut',preset:''};
 var NET={role:'solo',applying:false,up:false,n:0}; /* solo, host (produit le son) ou guest (télécommande) */
+var CUE={b:false,y:false,d:false}; /* chez un invité : instruments en préparation privée */
 var BKEYS=['cutoff','res','env','decay','accent','att','adec','rel','drive','bsub','blfor','blfod','bdly','brev'];
 var DN=['BD','SD','LT','HT','RS','CP','CH','OH'];
 var INS={bd:['BD','Kick'],sd:['SD','Caisse claire 909'],s8:['S8','Caisse claire 808'],lt:['LT','Tom bas'],mt:['MT','Tom médium'],ht:['HT','Tom haut'],
@@ -849,15 +876,15 @@ function tick(){
   while(nextTime<ctx.currentTime+.22){
     var d=60/bpmOf(P.tempo)/4,tt=nextTime+(cur%2?P.shuffle*d*.4:0);
     try{schedule(BL===32?(bar%2)*16+cur:cur,cur,tt);drums(cur,tt);ysched(Y.len===32?(bar%2)*16+cur:cur,tt);lsched(cur,bar,tt,d)}catch(e){audioMsg('Erreur audio ignorée : '+e.message)}nextTime+=d;cur=(cur+1)%16;
-    if(cur===0){bar++;if(fillArmed){fillArmed=false;$('fill').setAttribute('aria-pressed',false)}}
+    if(cur===0){bar++;if(fillArmed){fillArmed=false;$('fill').setAttribute('aria-pressed',false)}netQueued()}
   }
   timer=setTimeout(tick,25);
 }
 function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;playing=true;gateOpen=false;queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
-function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vca.gain.cancelScheduledValues(t);gateOff(t)}queue=[];playStep=-1;playB=-1;playY=-1;if(ctx)yOff(ctx.currentTime);lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netPlay()}
+function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vca.gain.cancelScheduledValues(t);gateOff(t)}queue=[];playStep=-1;playB=-1;playY=-1;if(ctx)yOff(ctx.currentTime);lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
 function audition(st){
   if(playing||st.g!==1)return;
-  if(NET.role==='guest'){netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0});return}
+  if(NET.role==='guest'){if(!CUE.b)netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0});return}
   initAudio();if(!ctx)return;var t=ctx.currentTime+.01;
   bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);
   vca.gain.setTargetAtTime(0,t+.22,.01);
@@ -1100,7 +1127,7 @@ function drums(i,t){
     if(fill){if(k===0)s=0;else if(k===1)s=i>=14?2:1;else if(k===3&&i===12)s=2;else if(k===2&&i===14)s=2}
     if(s&&!D.mute[k])hit(k,t,s===2?1:.62)}
 }
-function tap(k,vel){if(playing)return;if(NET.role==='guest'){netSend({t:'tp',k:k,v:vel});return}initAudio();if(ctx)hit(k,ctx.currentTime+.01,vel)}
+function tap(k,vel){if(playing)return;if(NET.role==='guest'){if(!CUE.d)netSend({t:'tp',k:k,v:vel});return}initAudio();if(ctx)hit(k,ctx.currentTime+.01,vel)}
 var stripEls=[],padEls=[];
 DN.forEach(function(n,k){
   var s=document.createElement('div');s.className='strip';
@@ -1226,7 +1253,7 @@ function ysched(yi,t){
   ypitch(st,t);ytrig(st,t);
   if(next.g===2)yGate=true;else yOff(t+dur*.8);
 }
-function ytap(st){if(playing||st.g!==1)return;if(NET.role==='guest'){netSend({t:'au',i:'y',n:st.n,o:st.o,a:st.a?1:0});return}initAudio();if(!ctx)return;var t=ctx.currentTime+.01;ypitch(st,t);ytrig(st,t);yOff(t+.25)}
+function ytap(st){if(playing||st.g!==1)return;if(NET.role==='guest'){if(!CUE.y)netSend({t:'au',i:'y',n:st.n,o:st.o,a:st.a?1:0});return}initAudio();if(!ctx)return;var t=ctx.currentTime+.01;ypitch(st,t);ytrig(st,t);yOff(t+.25)}
 for(var yi=0;yi<32;yi++)(function(i){
   var d=document.createElement('div');d.className='step';
   var num=document.createElement('div');num.className='num';num.innerHTML='<span class="dot"></span>'+(i+1);
@@ -1714,7 +1741,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=20; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=21; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -1755,15 +1782,21 @@ function netSync(){if(NET.role==='solo'||NET.applying||syncT)return;syncT=setTim
 function netFlush(){
   clearTimeout(syncT);syncT=0;if(NET.role==='solo')return;
   var m={t:'st'},n=0,k;
-  for(k in SEC){var j=JSON.stringify(SEC[k].get());if(j!==lastS[k]){lastS[k]=j;(m.s=m.s||{})[k]=JSON.parse(j);n++}}
-  for(k in P)if(!PLOC[k]&&P[k]!==lastP[k]){lastP[k]=P[k];(m.p=m.p||{})[k]=Math.round(P[k]*1e4)/1e4;n++}
+  for(k in SEC){if(cueHold(CUESEC[k]))continue;var j=JSON.stringify(SEC[k].get());if(j!==lastS[k]){lastS[k]=j;(m.s=m.s||{})[k]=JSON.parse(j);n++}}
+  for(k in P)if(!PLOC[k]&&!cueHold(CUEKEY[k])&&P[k]!==lastP[k]){lastP[k]=P[k];(m.p=m.p||{})[k]=Math.round(P[k]*1e4)/1e4;n++}
   if(n)netSend(m);
+  if(CUE.b||CUE.y||CUE.d)cueUI();
 }
 function netApply(m){
   NET.applying=true;
   try{var k,ap=false;
-    if(m.p)for(k in m.p){var v=+m.p[k];if(knobEls[k]&&!PLOC[k]&&v>=0&&v<=1){P[k]=v;lastP[k]=v;drawKnob(k);ap=true}}
-    if(m.s)for(k in m.s)if(SEC[k]&&m.s[k]&&typeof m.s[k]==='object'){try{SEC[k].set(m.s[k])}catch(e){}lastS[k]=JSON.stringify(SEC[k].get());SEC[k].draw();ap=true}
+    if(m.p)for(k in m.p){var v=+m.p[k];if(!(knobEls[k]&&!PLOC[k]&&v>=0&&v<=1))continue;
+      if(cueHold(CUEKEY[k])){cueM[CUEKEY[k]].p[k]=v;continue} /* instrument en cue : on note l'état du master sans l'afficher */
+      P[k]=v;lastP[k]=v;drawKnob(k);ap=true}
+    if(m.s)for(k in m.s){if(!(SEC[k]&&m.s[k]&&typeof m.s[k]==='object'))continue;
+      if(cueHold(CUESEC[k])){cueM[CUESEC[k]].s[k]=JSON.stringify(m.s[k]);continue}
+      try{SEC[k].set(m.s[k])}catch(e){}lastS[k]=JSON.stringify(SEC[k].get());SEC[k].draw();ap=true}
+    if(CUE.b||CUE.y||CUE.d)cueUI();
     if(ap)applyParams();
     if(NET.role==='host')save();
   }catch(e){}
@@ -1801,7 +1834,9 @@ function hostRx(c,m){
       netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD});
       if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle de l\'appareil hôte : recharge-la pour avoir toutes les fonctions.'});
       [0,1,2].forEach(function(q){if(lbuf[q])netLoop(q,c)});npeers();break;
-    case 'st':netApply(m);netSend(m,c);break;
+    case 'st':
+      if(m.q&&playing){qst.push({c:c,m:m});break} /* envoi d'un cue pendant la lecture : il entrera à la prochaine mesure */
+      netApply(m);netSend(m,c);if(m.g)netTo(c,{t:'cq',g:m.g});break;
     case 'cmd':
       if(m.c==='play'){if(!playing)start()}else if(m.c==='pause'){if(playing)stop()}
       else if(m.c==='rew')rew();else if(m.c==='fill')setFill(!fillArmed);break;
@@ -1890,6 +1925,7 @@ function guestRx(m){
       renderL();break;
     case 'lv':if(Array.isArray(m.v))['b','y','l','d','c'].forEach(function(z,i){$('zm-'+z).style.transform='scaleX('+num(m.v[i],0)+')'});break;
     case 'n':NET.n=m.n|0;nui();break;
+    case 'cq':if(CUE[m.g]!==undefined){cueNote[m.g]='En place sur le master';cueUI();cueClear(m.g,3500)}break;
     case 'ms':
       if(m.w==='l')lmsg(String(m.m||''));
       else if(/Versions différentes/.test(String(m.m))){NET.refused=true;nui();nmsg('L\'appareil hôte utilise une ancienne version de l\'appli et refuse la connexion. Sur l\'hôte : ferme complètement l\'appli, rouvre-la, puis recrée la session.')}
@@ -1947,6 +1983,57 @@ function gdial(){
 }
 function gretry(){if(NET.role!=='guest'||gT)return;gT=setTimeout(function(){gT=0;if(NET.role==='guest'&&!(hconn&&hconn.open))gconnect()},3000)}
 
+/* ----- cue : préparer un instrument en privé, puis l'envoyer au master -----
+   Réservé aux invités. Tant qu'un instrument est en cue, ses réglages et sa séquence restent sur le téléphone :
+   rien ne part vers l'hôte, et ce qui arrive de l'hôte est mis de côté (cueM) au lieu d'être affiché.
+   « Envoyer » transmet tout l'instrument en un seul message ; si le master joue, il l'applique au début de la mesure suivante. */
+var CUESEC={pat:'b',B:'b',Y:'y',D:'d'},CUEKEY={},cueM={b:null,y:null,d:null},cueNote={b:'',y:'',d:''},cueT={},qst=[];
+KN.forEach(function(k){var bx=k.box||'knobs',g=bx==='knobs'&&k.id!=='tempo'?'b':bx==='yknobs'?'y':(bx==='dknobs'&&k.id!=='shuffle')||bx==='kknobs'?'d':'';if(g&&!PLOC[k.id])CUEKEY[k.id]=g});
+function cueHold(g){return !!g&&CUE[g]&&NET.role==='guest'}
+function cueEach(g,fs,fp){var k;for(k in CUESEC)if(CUESEC[k]===g)fs(k);for(k in CUEKEY)if(CUEKEY[k]===g)fp(k)}
+function cueDirty(g){var d=false,M=cueM[g];if(!M)return false;
+  cueEach(g,function(k){if(JSON.stringify(SEC[k].get())!==M.s[k])d=true},function(k){if(Math.abs(P[k]-M.p[k])>2e-4)d=true});return d}
+function cueClear(g,ms){clearTimeout(cueT[g]);cueT[g]=setTimeout(function(){cueNote[g]='';cueUI()},ms)}
+function cueOn(g){
+  if(NET.role!=='guest'||CUE[g])return;
+  netFlush(); /* ce qui était en attente part d'abord : le cue démarre d'un état identique au master */
+  var M=cueM[g]={s:{},p:{}};cueEach(g,function(k){M.s[k]=JSON.stringify(SEC[k].get())},function(k){M.p[k]=Math.round(P[k]*1e4)/1e4});
+  CUE[g]=true;cueNote[g]='';cueUI();
+}
+function cueSend(g){
+  if(!cueHold(g))return;
+  if(!(hconn&&hconn.open)){cueNote[g]='Pas de liaison avec l\'hôte';cueUI();return}
+  var M=cueM[g],m={t:'st',s:{},p:{},q:1,g:g};
+  cueEach(g,function(k){var j=JSON.stringify(SEC[k].get());m.s[k]=JSON.parse(j);lastS[k]=j;M.s[k]=j},
+    function(k){var v=Math.round(P[k]*1e4)/1e4;m.p[k]=v;lastP[k]=P[k];M.p[k]=v});
+  netSend(m);cueNote[g]=playing?'Envoyé · entre à la prochaine mesure':'Envoyé';cueUI();cueClear(g,6000);
+}
+function cueOff(g){
+  if(!CUE[g])return;var M=cueM[g],m={s:{},p:{}},k;
+  CUE[g]=false;cueNote[g]='';
+  if(M){for(k in M.s)m.s[k]=JSON.parse(M.s[k]);for(k in M.p)m.p[k]=M.p[k];netApply(m)} /* retour à l'état du master : ce qui n'a pas été envoyé est abandonné */
+  cueM[g]=null;cueUI();
+}
+function cueUI(){
+  var guest=NET.role==='guest'&&!!NET.joined;
+  ['b','y','d'].forEach(function(g){
+    var on=guest&&CUE[g],dirty=on&&cueDirty(g),z=document.querySelector('.'+ZK[g]);
+    $('cue-'+g).hidden=!guest;z.classList.toggle('cue',!!on);
+    $('cue-'+g+'-on').hidden=on;$('cue-'+g+'-st').hidden=!on;$('cue-'+g+'-send').hidden=!on;$('cue-'+g+'-off').hidden=!on;
+    if(!on)return;
+    $('cue-'+g+'-st').textContent=cueNote[g]||(dirty?'En préparation · différent du master':'En préparation · identique au master');
+    $('cue-'+g+'-off').textContent=dirty?'Abandonner et quitter':'Quitter le cue';
+  });
+}
+['b','y','d'].forEach(function(g){
+  $('cue-'+g+'-on').onclick=function(){cueOn(g)};$('cue-'+g+'-send').onclick=function(){cueSend(g)};$('cue-'+g+'-off').onclick=function(){cueOff(g)};
+});
+/* côté hôte : les cues reçus pendant la lecture attendent le début de la mesure suivante */
+function netQueued(){
+  if(!qst.length)return;var q=qst;qst=[];
+  q.forEach(function(x){try{netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
+}
+
 /* ----- surveillance des liaisons et niveaux ----- */
 setInterval(function(){
   var now=Date.now();
@@ -1972,6 +2059,7 @@ document.addEventListener('visibilitychange',function(){
 
 /* ----- interface de session ----- */
 function nui(){
+  cueUI();
   var on=NET.role!=='solo',host=NET.role==='host',linked=host?!!NET.up:!!(hconn&&hconn.open),n=conns.length;
   $('n-solo').hidden=on;$('n-on').hidden=!on;
   $('n-stat').textContent=!on?'Solo':host?(linked?'Hôte · '+n+' invité'+(n>1?'s':''):'Hôte · connexion…'):(linked?(NET.refused?'Invité · hôte à mettre à jour':'Invité · connecté'+(NET.n>2?' · '+NET.n+' appareils':'')):'Invité · connexion…');
