@@ -218,26 +218,43 @@ html.fsl,html.fsl body{overflow:hidden}
 .zone.lock .zt span::after{content:" · 🔒"}
 .zone.lock .zv input{visibility:hidden}
 .kw.klock{opacity:.35;pointer-events:none}
-.pchips{display:flex;flex-wrap:wrap;gap:6px}
-.btn.pchip{--zc:var(--ink);--zon:var(--panel);padding:6px 9px;font-size:12px}
+.npanel{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid color-mix(in srgb,var(--zc) 45%,var(--line));border-radius:8px;background:color-mix(in srgb,var(--zc) 4%,var(--panel))}
+.npanel[hidden]{display:none}
+.nphead{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.nphead h3{margin:0;font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;text-transform:uppercase}
+.nphead .lbl{margin-left:auto}
+#acc{border:2px solid var(--zc);scroll-margin-top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + 56px)}
+.asub{margin-top:2px}
+/* cases d'accès : une par instrument, cochée = accordé */
+.pchips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+@media (min-width:480px){.pchips{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:760px){.pchips{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.btn.pchip{--zc:var(--ink);--zon:var(--panel);display:flex;align-items:center;gap:7px;min-height:42px;padding:6px 8px;font-size:12px;line-height:1.15;text-align:left}
+.pchip::before{content:"";flex:0 0 16px;height:16px;box-sizing:border-box;border:2px solid currentColor;border-radius:3px;font-size:13px;line-height:12px;font-weight:700;text-align:center}
 .pchip[data-g="b"]{--zc:var(--c-b);--zon:var(--on-c)}
 .pchip[data-g="y"]{--zc:var(--c-y);--zon:var(--on-c)}
 .pchip[data-g="l"]{--zc:var(--c-l);--zon:var(--on-c)}
 .pchip[data-g="c"]{--zc:var(--c-c);--zon:var(--on-c)}
 .btn.pchip[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
-.btn.pchip[aria-pressed="false"]{opacity:.75}
-#n-guests{display:flex;flex-direction:column}
-#n-guests[hidden]{display:none}
-.grow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
-.gname{flex:1 1 100%;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.grow .pchips{flex:1 1 220px}
+.pchip[aria-pressed="true"]::before{content:"✓"}
+.btn.pchip[aria-pressed="false"]{background:transparent;color:var(--ink-soft)}
+#n-guests,#reqs{display:flex;flex-direction:column;gap:8px}
+#reqs:empty{display:none}
+.grow,.req{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.grow .pchips,.req .pchips,.req .lbl,.req .actions{grid-column:1/-1}
+.gname,.req b{min-width:0;font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.req b{white-space:normal;overflow-wrap:anywhere}
+.req{border:2px dashed var(--zc);background:color-mix(in srgb,var(--zc) 14%,var(--panel))}
+.rtag{justify-self:end;padding:2px 7px;border-radius:4px;background:var(--zc);color:var(--zon);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.btn.gout{padding:5px 9px;font-size:11px}
 #n-name{width:9em}
 #bpm-pm{display:flex;gap:4px}
 #bpm-pm[hidden]{display:none}
-#reqs{position:fixed;left:0;right:0;bottom:0;z-index:70;display:flex;flex-direction:column;gap:8px;max-height:75vh;overflow:auto;padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));pointer-events:none}
-#reqs:empty{display:none}
-.req{pointer-events:auto;align-self:center;width:min(100%,520px);display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--panel);color:var(--ink);border:2px solid var(--c-m);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
-.req b{font-size:15px;overflow-wrap:anywhere}
+#reqbar{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:70;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--c-m);color:var(--on-c);font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#reqbar[hidden]{display:none}
+#reqbar span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+#reqbar .btn{flex:0 0 auto;background:var(--on-c);border-color:var(--on-c);color:var(--c-m)}
+
 /* zones colorées : basse rouge, synthé bleu, looper vert, rythmes neutre */
 .zone{display:flex;flex-direction:column;gap:14px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:14px;--zbg:var(--panel);background:var(--zbg);--zc:var(--ink);--zon:var(--panel);--zhi:var(--knob-mark)}
 .zb{--zc:var(--c-b);--zon:var(--on-c);--zhi:var(--c-b-hi)}
@@ -301,25 +318,33 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
     </div>
     <div class="editor" id="n-on" hidden>
-      <div class="nrow">
-        <div class="nqr" id="n-qr" role="img" aria-label="QR code du lien de la session"></div>
-        <div class="ninfo">
-          <div class="lbl">Code de session</div>
-          <div class="ncode" id="n-codev"></div>
-          <div class="nlink" id="n-link"></div>
-          <div class="actions">
-            <button class="btn primary" id="n-share">Partager le lien</button>
-            <button class="btn" id="n-leave">Quitter la session</button>
+      <section class="npanel" id="acc" hidden aria-labelledby="acc-t">
+        <div class="nphead"><h3 id="acc-t">Accès des invités</h3><span class="lbl" id="acc-n" role="status"></span></div>
+        <p class="hint">Toi, le master, tu peux tout. Un invité ne touche que les instruments cochés sur sa ligne : touche une case pour l'ouvrir ou la fermer.</p>
+        <div id="reqs"></div>
+        <div id="n-guests"></div>
+      </section>
+      <section class="npanel" id="inv" aria-labelledby="inv-t">
+        <div class="nphead"><h3 id="inv-t">Inviter</h3></div>
+        <div class="nrow">
+          <div class="nqr" id="n-qr" role="img" aria-label="QR code du lien de la session"></div>
+          <div class="ninfo">
+            <div class="lbl">Code de session</div>
+            <div class="ncode" id="n-codev"></div>
+            <div class="nlink" id="n-link"></div>
+            <div class="actions">
+              <button class="btn primary" id="n-share">Partager le lien</button>
+              <button class="btn" id="n-leave">Quitter la session</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="edrow" id="n-me" hidden>
-        <label class="lbl" for="n-name">Ton nom</label>
-        <input class="sel" id="n-name" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Invité">
-        <span class="lbl" id="n-acc" role="status"></span>
-        <button class="btn primary" id="n-ask" hidden>Redemander l'accès</button>
-      </div>
-      <div id="n-guests" hidden></div>
+        <div class="edrow" id="n-me" hidden>
+          <label class="lbl" for="n-name">Ton nom</label>
+          <input class="sel" id="n-name" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Invité">
+          <span class="lbl" id="n-acc" role="status"></span>
+          <button class="btn primary" id="n-ask" hidden>Redemander l'accès</button>
+        </div>
+      </section>
       <p class="hint" id="n-help"></p>
     </div>
     <p class="lbl" id="n-msg" role="status"></p>
@@ -673,7 +698,7 @@ html.fsl,html.fsl body{overflow:hidden}
     </div>
   </section>
 </main>
-<div id="reqs" aria-live="polite"></div>
+<div id="reqbar" role="status" hidden><span id="reqbar-t"></span><button class="btn" id="reqbar-go">Répondre</button></div>
 
 <script>
 (function(){
@@ -1786,7 +1811,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=23; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=24; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2155,33 +2180,54 @@ function kick(c,byMaster){
   REQ=REQ.filter(function(r){return r.c._gid!==c._gid});reqUI();nui();
 }
 function chipRow(sel,cb){
-  var d=mk('div','pchips');d.setAttribute('role','group');d.setAttribute('aria-label','Accès');
+  var d=mk('div','pchips');
   PGS.split('').forEach(function(g){
     var b=mk('button','btn pchip',PGN[g]);b.type='button';b.setAttribute('data-g',g);b.setAttribute('aria-pressed',sel.indexOf(g)>=0?'true':'false');
     b.onclick=function(){var on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on?'true':'false');cb(g,on)};d.appendChild(b)});
   return d;
 }
 function reqUI(){
-  var box=$('reqs');box.textContent='';if(NET.role!=='host')return;
+  var box=$('reqs');box.textContent='';if(NET.role!=='host'){reqBar();return}
+  if(REQ.length)box.appendChild(mk('div','lbl asub','Demandes en attente'));
   REQ.forEach(function(r){
     var join=!!r.c._wait,d=mk('div','req');d.setAttribute('role','group');
     d.appendChild(mk('b','',join?r.c._n+' veut rejoindre la session':r.c._n+' demande : '+pnames(r.want)));
-    d.appendChild(mk('span','lbl',join?'Choisis ce qu\'il peut toucher':'Ses accès si tu valides'));
+    d.appendChild(mk('span','rtag',join?'Nouveau':'Demande'));
+    d.appendChild(mk('span','lbl',join?'Coche ce qu\'il pourra toucher, puis accepte':'Ses accès si tu valides'));
     d.appendChild(chipRow(r.sel,function(g,on){r.sel=on?pclean(r.sel+g):r.sel.replace(g,'')}));
     var a=mk('div','actions'),ok=mk('button','btn primary ok',join?'Accepter':'Valider'),no=mk('button','btn no','Refuser');
     ok.type=no.type='button';ok.onclick=function(){reqDone(r,true)};no.onclick=function(){reqDone(r,false)};
     a.appendChild(ok);a.appendChild(no);d.appendChild(a);box.appendChild(d);
   });
+  reqBar();
 }
+/* Bandeau en bas de l'écran : il signale une demande quand le panneau des accès n'est pas à l'écran. */
+function accVisible(){if(!Z.m||CFS)return false;var r=$('reqs').getBoundingClientRect();return r.height>0&&r.top<window.innerHeight-70&&r.bottom>tbar.offsetHeight+40}
+function reqBar(){
+  var n=NET.role==='host'?REQ.length:0,bar=$('reqbar');
+  if(n)$('reqbar-t').textContent=n>1?n+' demandes d\'accès en attente':REQ[0].c._wait?REQ[0].c._n+' veut rejoindre':REQ[0].c._n+' demande : '+pnames(REQ[0].want);
+  bar.hidden=!n||accVisible();
+}
+$('reqbar-go').onclick=function(){
+  if(CFS)cfsSet(false);
+  Z.m=true;renderZ();$('acc').scrollIntoView({block:'start'});reqBar();
+};
+(function(){var w=0;function chk(){if(w||!REQ.length)return;w=requestAnimationFrame(function(){w=0;reqBar()})}
+  window.addEventListener('scroll',chk,{passive:true});window.addEventListener('resize',chk)})();
 function guests(){var seen={},l=[];conns.forEach(function(c){if(!c._ok||c._wait||c._gone||seen[c._gid])return;seen[c._gid]=1;l.push(c)});return l}
 function guestsUI(){
-  var box=$('n-guests'),host=NET.role==='host';box.hidden=!host;if(!host)return;box.textContent='';
-  var l=guests();box.appendChild(mk('div','lbl',l.length?'Invités et accès (touche un instrument pour l\'ouvrir ou le fermer)':'Aucun invité accepté pour le moment'));
+  var box=$('n-guests'),host=NET.role==='host',l=host?guests():[],nq=REQ.length;
+  $('acc').hidden=!host;$('inv-t').textContent=host?'Inviter':'Session';if(!host)return;
+  box.textContent='';
+  $('acc-n').textContent=l.length+' invité'+(l.length>1?'s':'')+(nq?' · '+nq+' demande'+(nq>1?'s':''):'');
+  if(!l.length){if(!nq)box.appendChild(mk('p','hint','Personne pour l\'instant. Fais scanner le QR code ci-dessous : chaque demande d\'accès arrivera ici.'));return}
+  box.appendChild(mk('div','lbl asub','Dans la session'));
   l.forEach(function(c){
     var row=mk('div','grow'),out=mk('button','btn gout','Retirer');out.type='button';out.onclick=function(){kick(c,true)};
-    row.appendChild(mk('div','gname',c._n));
+    row.setAttribute('role','group');row.setAttribute('aria-label',c._n);
+    row.appendChild(mk('div','gname',c._n));row.appendChild(out);
     row.appendChild(chipRow(c._pm,function(g,on){permGive(c,on?c._pm+g:c._pm.replace(g,''))}));
-    row.appendChild(out);box.appendChild(row);
+    box.appendChild(row);
   });
 }
 /* -- côté invité -- */
