@@ -276,6 +276,10 @@ html.fsl,html.fsl body{overflow:hidden}
       <p class="hint" id="n-help"></p>
     </div>
     <p class="lbl" id="n-msg" role="status"></p>
+    <div class="edrow">
+      <span class="lbl" id="n-ver"></span>
+      <button class="btn" id="n-upd">Vérifier les mises à jour</button>
+    </div>
   </section>
 
   <section class="zone zb">
@@ -1710,6 +1714,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
+var BUILD=20; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -1787,13 +1792,14 @@ function setPlaying(on){
 /* ----- côté hôte ----- */
 function hostRx(c,m){
   if(!m||typeof m!=='object')return;c._rx=Date.now();
+  if(!c._ok&&m.t!=='hi')return;
   var k=m.k|0,i=m.i==='y'?'y':'b';
   switch(m.t){
     case 'hi':
-      if(m.v!==PROTO){netTo(c,{t:'ms',m:'Versions différentes : recharge la page sur les deux appareils.'});return}
       netFlush();c._ok=true;
       var s={},p={},x;for(x in SEC)s[x]=SEC[x].get();for(x in P)if(!PLOC[x])p[x]=P[x];
-      netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0});
+      netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD});
+      if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle de l\'appareil hôte : recharge-la pour avoir toutes les fonctions.'});
       [0,1,2].forEach(function(q){if(lbuf[q])netLoop(q,c)});npeers();break;
     case 'st':netApply(m);netSend(m,c);break;
     case 'cmd':
@@ -1866,7 +1872,10 @@ function guestRx(m){
   switch(m.t){
     case 'full':
       netApply({s:m.s,p:m.p});snap();setPlaying(!!m.pl);fillArmed=!!m.f;$('fill').setAttribute('aria-pressed',fillArmed);
-      nmsg('');if(!NET.joined){NET.joined=true;Z.m=false;renderZ()}nui();break;
+      var hb=m.b|0,old=hb<BUILD;NET.refused=false;
+      if(hb>BUILD&&!updTried(hb)){updGo(hb);break} /* l'hôte est plus récent : on se met à jour, puis on rejoint tout seul */
+      nmsg(old?'L\'appareil hôte utilise une version plus ancienne'+(hb?' ('+hb+')':'')+' : certaines fonctions peuvent manquer. Pour la mettre à jour, ferme puis rouvre l\'appli sur l\'hôte.':'');
+      if(!NET.joined){NET.joined=true;if(!old){Z.m=false;renderZ()}}nui();break;
     case 'st':netApply(m);break;
     case 'pl':setPlaying(!!m.on);break;
     case 'fl':fillArmed=!!m.on;$('fill').setAttribute('aria-pressed',fillArmed);break;
@@ -1881,7 +1890,10 @@ function guestRx(m){
       renderL();break;
     case 'lv':if(Array.isArray(m.v))['b','y','l','d','c'].forEach(function(z,i){$('zm-'+z).style.transform='scaleX('+num(m.v[i],0)+')'});break;
     case 'n':NET.n=m.n|0;nui();break;
-    case 'ms':if(m.w==='l')lmsg(String(m.m||''));else nmsg(String(m.m||''));break;
+    case 'ms':
+      if(m.w==='l')lmsg(String(m.m||''));
+      else if(/Versions différentes/.test(String(m.m))){NET.refused=true;nui();nmsg('L\'appareil hôte utilise une ancienne version de l\'appli et refuse la connexion. Sur l\'hôte : ferme complètement l\'appli, rouvre-la, puis recrée la session.')}
+      else nmsg(String(m.m||''));break;
   }
 }
 /* Envoi d'un son du looper vers l'hôte, par morceaux, sans saturer la liaison. */
@@ -1903,7 +1915,7 @@ function guestStart(code){
   if(playing)stop();
   if(ctx){try{ctx.suspend()}catch(e){}}try{if(silent)silent.pause()}catch(e){}
   zan=null;['b','y','l','d','c'].forEach(function(z){$('zm-'+z).style.transform='scaleX(0)'});
-  NET.role='guest';NET.joined=false;ncode=code;document.body.classList.add('guest');Z.m=true;renderZ();
+  NET.role='guest';NET.joined=false;NET.refused=false;ncode=code;document.body.classList.add('guest');Z.m=true;renderZ();
   audioMsg('Télécommande : le son sort sur l\'appareil hôte');
   nui();nmsg('Connexion à la session '+code+'…');gconnect();
 }
@@ -1928,7 +1940,7 @@ function gdial(){
   if(hconn){var old=hconn;hconn=null;try{old.close()}catch(e){}}
   dialAt=Date.now();
   var c=hconn=peer.connect(PID+ncode,{reliable:true,serialization:'json'});
-  c.on('open',function(){if(c!==hconn)return;lastRx=Date.now();netTo(c,{t:'hi',v:PROTO});nui()});
+  c.on('open',function(){if(c!==hconn)return;lastRx=Date.now();netTo(c,{t:'hi',v:PROTO,b:BUILD});nui()});
   c.on('data',function(m){if(c===hconn)try{guestRx(m)}catch(e){}});
   c.on('close',function(){if(c!==hconn)return;hconn=null;nui();nmsg('Liaison perdue avec l\'appareil hôte. Nouvel essai automatique.');gretry()});
   c.on('error',function(){});
@@ -1962,7 +1974,7 @@ document.addEventListener('visibilitychange',function(){
 function nui(){
   var on=NET.role!=='solo',host=NET.role==='host',linked=host?!!NET.up:!!(hconn&&hconn.open),n=conns.length;
   $('n-solo').hidden=on;$('n-on').hidden=!on;
-  $('n-stat').textContent=!on?'Solo':host?(linked?'Hôte · '+n+' invité'+(n>1?'s':''):'Hôte · connexion…'):(linked?'Invité · connecté'+(NET.n>2?' · '+NET.n+' appareils':''):'Invité · connexion…');
+  $('n-stat').textContent=!on?'Solo':host?(linked?'Hôte · '+n+' invité'+(n>1?'s':''):'Hôte · connexion…'):(linked?(NET.refused?'Invité · hôte à mettre à jour':'Invité · connecté'+(NET.n>2?' · '+NET.n+' appareils':'')):'Invité · connexion…');
   if(!on)return;
   var url=location.origin+location.pathname+'#'+ncode,q=$('n-qr');
   $('n-codev').textContent=ncode;$('n-link').textContent=url;q.hidden=!host;
@@ -1972,12 +1984,22 @@ function nui(){
   $('n-help').textContent=host?'Cet appareil produit le son : relie-le à l\'enceinte et garde l\'appli ouverte à l\'écran. Les autres scannent le QR code ou ouvrent le lien, sans rien installer.'
     :'Tu pilotes l\'appareil hôte : le son sort sur son enceinte, pas sur ce téléphone. Tes réglages personnels ne sont pas modifiés.';
 }
-$('n-host').onclick=function(){var saved='';try{saved=localStorage.getItem('lst-host')||''}catch(e){}hostTries=0;hostStart(CODE_RE.test(saved)?saved:'')};
+$('n-host').onclick=function(){
+  var code='';try{code=localStorage.getItem('lst-host')||''}catch(e){}
+  if(!CODE_RE.test(code))code=newCode();hostTries=0;nmsg('Vérification de la version…');
+  updCheck(function(newer,b){
+    if(newer&&!updTried(b)){ /* on recharge la nouvelle version, puis la session se recrée toute seule */
+      try{localStorage.setItem('lst-host',code);sessionStorage.setItem('lst-hosting','1')}catch(e){}
+      updGo(b);return}
+    hostStart(code);
+  });
+};
 function njoin(){
   var c=$('n-code').value.trim().toUpperCase();
   if(!CODE_RE.test(c)){nmsg('Le code fait 5 caractères (lettres et chiffres).');return}
   try{history.replaceState(null,'',location.pathname+location.search+'#'+c)}catch(e){}
-  guestStart(c);
+  nmsg('Vérification de la version…');
+  updCheck(function(newer,b){if(newer&&!updTried(b)){updGo(b);return}guestStart(c)});
 }
 $('n-join').onclick=njoin;
 $('n-code').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();njoin()}});
@@ -1993,12 +2015,46 @@ $('n-leave').onclick=function(){
   try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
   location.reload();
 };
+/* ----- mises à jour -----
+   Tous les appareils d'une session doivent tourner sur la même version. Or le navigateur garde la page en cache
+   une dizaine de minutes, et une appli laissée ouverte ne se recharge jamais seule. On compare donc notre numéro
+   à celui du petit fichier version.json, toujours lu sur le réseau, et on recharge en contournant les caches. */
+function updCheck(cb){ /* cb(true|false|null si le réseau ne répond pas, numéro en ligne) */
+  var done=false,t=setTimeout(function(){fin(null)},2500);
+  function fin(v,b){if(done)return;done=true;clearTimeout(t);cb(v,b)}
+  try{fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null})
+    .then(function(j){var b=j?(j.build|0):0;fin(b?b>BUILD:null,b)},function(){fin(null)})}catch(e){fin(null)}
+}
+function updTried(b){try{return sessionStorage.getItem('lst-upd')===String(b)}catch(e){return true}}
+function updGo(b){
+  try{sessionStorage.setItem('lst-upd',String(b))}catch(e){}
+  nmsg('Mise à jour de l\'appli…');
+  function go(){location.replace(location.pathname+'?v='+b+location.hash)}
+  try{if(window.caches)caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}).then(go,go);else go()}catch(e){go()}
+}
+function nver(){
+  $('n-ver').textContent='Version '+BUILD+(NET.upd?' · version '+NET.upd+' disponible':'');
+  $('n-upd').textContent=NET.upd?'Installer la mise à jour':'Vérifier les mises à jour';
+}
+$('n-upd').onclick=function(){
+  nmsg('Vérification de la version…');
+  updCheck(function(newer,b){
+    if(newer){updGo(b);return}
+    nmsg(newer===null?'Vérification impossible : pas de réseau.':'Cette version est la plus récente.');
+  });
+};
+document.addEventListener('pointerdown',function(){NET.touched=true},true);
 function netBoot(){
   var h=(location.hash||'').replace(/^#/,'').toUpperCase(),hosting=false,saved='';
   try{hosting=sessionStorage.getItem('lst-hosting')==='1';saved=localStorage.getItem('lst-host')||''}catch(e){}
-  if(hosting&&CODE_RE.test(saved))hostStart(saved);
-  else if(CODE_RE.test(h))guestStart(h);
-  else nui();
+  try{if(/[?&]v=\d+/.test(location.search))history.replaceState(null,'',location.pathname+location.hash)}catch(e){}
+  var want=hosting&&CODE_RE.test(saved)?'host':CODE_RE.test(h)?'guest':'';
+  nver();nui();if(want)nmsg('Vérification de la version…');
+  updCheck(function(newer,b){
+    if(newer&&!updTried(b)&&(want||!NET.touched)){updGo(b);return} /* au lancement, avant que tu aies commencé à jouer */
+    if(newer){NET.upd=b;nver()}
+    if(want==='host')hostStart(saved);else if(want==='guest')guestStart(h);
+  });
 }
 
 /* ---------- démarrage ---------- */
