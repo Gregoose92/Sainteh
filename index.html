@@ -198,6 +198,7 @@ html.fsl,html.fsl body{overflow:hidden}
 .zone.cue .zt span::after{content:" · CUE"}
 .wide{font-weight:inherit}
 @media (max-width:700px){.wide{display:none}}
+.vtop{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;color:var(--ink-soft);margin-left:6px;vertical-align:middle}
 /* session à plusieurs */
 .nstat{margin-left:auto;text-align:right}
 .nrow{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
@@ -244,7 +245,7 @@ html.fsl,html.fsl body{overflow:hidden}
 <main class="machine">
   <div class="top">
     <div class="plate">
-      <h1>LE SAINT TEH</h1>
+      <h1>LE SAINT TEH <span class="vtop" id="ver-top"></span></h1>
       <p>Bass line façon 303, synthé lead, congas, looper voix et boîte à rythmes, à jouer seul ou à plusieurs sur la même enceinte.</p>
     </div>
   </div>
@@ -252,6 +253,7 @@ html.fsl,html.fsl body{overflow:hidden}
       <div class="bpm" aria-live="off"><span id="bpmv">130</span><small>BPM</small></div>
       <button class="btn run" id="play" aria-pressed="false">▶ Lecture</button>
       <button class="btn" id="rew" title="Revenir au premier pas">⏮ Début</button>
+      <button class="btn primary" id="upd-top" hidden>Mettre à jour</button>
       <span id="astate" class="lbl" role="status" data-ok>Audio en attente</span>
   </div>
 
@@ -753,7 +755,8 @@ if(D.kick===undefined)D.kick='classic';
 if(!Array.isArray(D.inst)||D.inst.length!==8||D.inst.some(function(i){return !INS[i]}))D.inst=KITS.classic.slice();
 if(!Y.ftype)Y.ftype='lowpass';if(!Y.lfoT)Y.lfoT='cut';if(!Y.chord)Y.chord='off';if(Y.preset===undefined)Y.preset='';
 var saveT=0;
-function save(){netSync();if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(function(){try{localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),D:D,Y:Y,L:L,B:B}))}catch(e){}},400)}
+function saveNow(){clearTimeout(saveT);if(NET.role==='guest')return;try{localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),D:D,Y:Y,L:L,B:B}))}catch(e){}}
+function save(){netSync();if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(saveNow,400)}
 
 /* ---------- moteur audio ---------- */
 var ctx=null,osc,f1,f2,vca,pre,shaper,post,master,analyser,scopeBuf;
@@ -1741,7 +1744,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=21; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=22; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -1829,7 +1832,7 @@ function hostRx(c,m){
   var k=m.k|0,i=m.i==='y'?'y':'b';
   switch(m.t){
     case 'hi':
-      netFlush();c._ok=true;
+      netFlush();c._ok=true;if((m.b|0)>BUILD){NET.upd=m.b|0;nver()} /* un invité a une version plus récente : elle existe donc */
       var s={},p={},x;for(x in SEC)s[x]=SEC[x].get();for(x in P)if(!PLOC[x])p[x]=P[x];
       netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD});
       if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle de l\'appareil hôte : recharge-la pour avoir toutes les fonctions.'});
@@ -1867,7 +1870,7 @@ function dropConn(c){
   liveOff('b',c._id);liveOff('y',c._id);for(var id in nfiles)if(nfiles[id].c===c)delete nfiles[id];
   npeers();
 }
-function npeers(){if(NET.role==='host'){netSend({t:'n',n:conns.length+1});nui()}}
+function npeers(){if(NET.role==='host'){netSend({t:'n',n:conns.length+1});nui();nver()}}
 function newCode(){var s='';for(var i=0;i<5;i++)s+=ALPHA.charAt(Math.floor(Math.random()*ALPHA.length));return s}
 function mkPeer(id){
   if(!window.Peer){nmsg('Module de liaison indisponible : recharge la page avec du réseau.');return null}
@@ -1925,6 +1928,7 @@ function guestRx(m){
       renderL();break;
     case 'lv':if(Array.isArray(m.v))['b','y','l','d','c'].forEach(function(z,i){$('zm-'+z).style.transform='scaleX('+num(m.v[i],0)+')'});break;
     case 'n':NET.n=m.n|0;nui();break;
+    case 'up':if((m.b|0)>BUILD)updGo(m.b|0);break;
     case 'cq':if(CUE[m.g]!==undefined){cueNote[m.g]='En place sur le master';cueUI();cueClear(m.g,3500)}break;
     case 'ms':
       if(m.w==='l')lmsg(String(m.m||''));
@@ -2116,21 +2120,45 @@ function updCheck(cb){ /* cb(true|false|null si le réseau ne répond pas, numé
 function updTried(b){try{return sessionStorage.getItem('lst-upd')===String(b)}catch(e){return true}}
 function updGo(b){
   try{sessionStorage.setItem('lst-upd',String(b))}catch(e){}
+  try{saveNow()}catch(e){}
   nmsg('Mise à jour de l\'appli…');
   function go(){location.replace(location.pathname+'?v='+b+location.hash)}
   try{if(window.caches)caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}).then(go,go);else go()}catch(e){go()}
 }
 function nver(){
+  var ses=NET.role==='host'&&conns.length>0;
+  $('ver-top').textContent='v'+BUILD;
   $('n-ver').textContent='Version '+BUILD+(NET.upd?' · version '+NET.upd+' disponible':'');
-  $('n-upd').textContent=NET.upd?'Installer la mise à jour':'Vérifier les mises à jour';
+  $('n-upd').textContent=NET.upd?(ses?'Mettre à jour toute la session':'Installer la mise à jour'):'Vérifier les mises à jour';
+  $('upd-top').hidden=!NET.upd;$('upd-top').textContent=ses?'Mettre à jour la session':'Mettre à jour (v'+NET.upd+')';
 }
-$('n-upd').onclick=function(){
+/* Une mise à jour interromprait-elle quelque chose ? Si oui, on la propose au lieu de la lancer. */
+function updBusy(){
+  if(NET.role==='host')return playing||conns.length>0;
+  if(NET.role==='guest')return ['b','y','d'].some(function(g){return CUE[g]&&cueDirty(g)});
+  return playing;
+}
+/* Une appli remise au premier plan n'est pas rechargée par le téléphone : on vérifie donc aussi à ce moment-là. */
+function updWatch(auto){
+  updCheck(function(newer,b){
+    if(!newer)return;
+    NET.upd=b;nver();
+    if(auto&&!updBusy()&&!updTried(b))updGo(b);
+  });
+}
+/* Mise à jour demandée à la main. Depuis l'hôte, elle entraîne tous les invités : chacun se recharge puis revient seul dans la session. */
+function updAll(){
   nmsg('Vérification de la version…');
   updCheck(function(newer,b){
-    if(newer){updGo(b);return}
-    nmsg(newer===null?'Vérification impossible : pas de réseau.':'Cette version est la plus récente.');
+    var v=newer?b:(NET.upd>BUILD?NET.upd:0);
+    if(!v){nmsg(newer===null?'Vérification impossible : pas de réseau.':'Cette version est la plus récente.');return}
+    if(NET.role==='host'&&conns.length){netSend({t:'up',b:v});setTimeout(function(){updGo(v)},600)}else updGo(v);
   });
-};
+}
+$('n-upd').onclick=updAll;$('upd-top').onclick=updAll;
+document.addEventListener('visibilitychange',function(){if(!document.hidden)updWatch(true)});
+window.addEventListener('pageshow',function(e){if(e.persisted)updWatch(true)});
+setInterval(function(){if(!document.hidden)updWatch(false)},120000);
 document.addEventListener('pointerdown',function(){NET.touched=true},true);
 function netBoot(){
   var h=(location.hash||'').replace(/^#/,'').toUpperCase(),hosting=false,saved='';
