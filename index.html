@@ -33,6 +33,7 @@ button{touch-action:manipulation}
   --knob:#232628; --knob-mark:#f1f1ec; --key:#eeeeea; --key-ink:#1b1e20; --key-black:#232628; --key-black-ink:#f1f1ec;
   --btn:#dcdfdf; --focus:#0b63c9;
   --c-b:#c62f1f; --c-y:#1f5fbf; --c-l:#1f7a45; --on-c:#ffffff; --c-b-hi:#ff6a55; --c-y-hi:#6aaeff; --c-l-hi:#5bd58e; --c-m:#6b3fc4; --c-m-hi:#b79cff; --c-c:#b25a00; --c-c-hi:#ffb057;
+  --cg-skin-hi:#f7eedb; --cg-skin:#e9d7b6; --cg-skin-lo:#c6a678; --cg-hoop:#a3a8ab; --cg-lug:#62676a; --cg-wood:#7b4421; --cg-shade:#00000040; --cg-ink:#3b2a17;
   --f-display:"Michroma","Eurostile","Arial Black",sans-serif;
   --f-body:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;
   --f-mono:"Share Tech Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -166,6 +167,16 @@ button,select,input{font:inherit;color:inherit}
 .cpad[data-s="o"]{min-height:86px;background:color-mix(in srgb,var(--zc) 20%,var(--btn));border-color:color-mix(in srgb,var(--zc) 55%,var(--line))}
 .cpad.hit,.cpad[data-s="o"].hit{background:var(--zc);border-color:var(--zc);color:var(--zon)}
 .cpad.hit small{color:var(--zon)}
+/* congas, vue « peaux » : trois fûts vus de dessus, le son dépend de l'endroit frappé */
+.cskins{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:12px 10px;touch-action:none;user-select:none;-webkit-user-select:none;--dw:46%}
+.cdw{margin:0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;width:min(calc(var(--dw) * var(--k)),calc(250px * var(--k)))}
+.cdrum{display:block;width:100%;height:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;outline-offset:4px}
+.cgg{fill:none;stroke:var(--cg-ink);stroke-opacity:.2;stroke-width:1;stroke-dasharray:3 4;pointer-events:none}
+.cgr{fill:none;stroke:var(--zc);stroke-width:4;opacity:0;pointer-events:none;transform-box:fill-box;transform-origin:center}
+.cgr.go{animation:cgr .3s ease-out}
+@keyframes cgr{from{opacity:.95;transform:scale(.5)}to{opacity:0;transform:scale(3.2)}}
+@media (prefers-reduced-motion:reduce){.cgr.go{animation-duration:.12s}}
+@media (min-width:701px){.cskins{--dw:30%}}
 /* session à plusieurs */
 .nstat{margin-left:auto;text-align:right}
 .nrow{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
@@ -503,9 +514,17 @@ button,select,input{font:inherit;color:inherit}
 
   <section class="zone zc">
     <h2><button class="zt" id="zt-c" aria-expanded="true"><span>CONGAS</span><i aria-hidden="true"></i></button><div class="zv"><input type="range" id="zv-c" min="0" max="100" value="75" aria-label="Volume des congas"><div class="zm" aria-hidden="true"><i id="zm-c"></i></div></div></h2>
+    <div class="edrow">
+      <span class="lbl">Affichage</span>
+      <div class="seg" role="group" aria-label="Affichage des congas">
+        <button class="btn" id="cv-pads">Pads</button>
+        <button class="btn" id="cv-skin">Peaux</button>
+      </div>
+    </div>
     <div class="cpads" id="cpads" role="group" aria-label="Congas : trois fûts, quatre frappes"></div>
+    <div class="cskins" id="cskins" role="group" aria-label="Congas : trois peaux, le son dépend de l'endroit frappé" hidden></div>
     <div class="knobs" id="cknobs"></div>
-    <p class="hint">Instrument joué en direct, sans séquence. Chaque colonne est un fût, chaque ligne une frappe. Joue à plusieurs doigts, ou glisse d'un pad à l'autre pour enchaîner.</p>
+    <p class="hint" id="c-hint"></p>
   </section>
 
   <section class="zone zd">
@@ -1501,7 +1520,8 @@ renderLive();
 var cbus,csd,csr;
 var CG=[{n:'Quinto',f:311},{n:'Conga',f:233},{n:'Tumba',f:175}];
 var CST=[['s','Slap','claquée'],['o','Ouvert','ouverte'],['m','Étouffé','étouffée'],['b','Basse','basse']];
-function conga(d,s,vel,t){
+function conga(d,s,vel,t,br){
+  if(br===undefined)br=.35;br=Math.max(0,Math.min(1,br)); /* brillance de la frappe ouverte : plus on s'approche du bord, plus elle est riche */
   var f0=CG[d].f*Math.pow(2,(P.ctune-.5)*14/12),de=.45+P.cdec*1.1,lv=vel,nodes=[],g,g2,g3,f;
   function G(){var x=ctx.createGain();x.connect(cbus);nodes.push(x);return x}
   function O(fa,fb,ft,dur){var x=ctx.createOscillator();x.type='sine';x.frequency.setValueAtTime(fa,t);x.frequency.exponentialRampToValueAtTime(fb,t+ft);x.start(t);x.stop(t+dur+.05);return x}
@@ -1509,8 +1529,8 @@ function conga(d,s,vel,t){
   function F(type,fr,q){var x=ctx.createBiquadFilter();x.type=type;x.frequency.value=fr;if(q)x.Q.value=q;return x}
   function E(x,pk,dc){x.gain.setValueAtTime(Math.max(pk,.0002),t);x.gain.exponentialRampToValueAtTime(.0001,t+dc)}
   if(s==='o'){ /* ouverte : le fût chante */
-    g=G();E(g,lv*.8,.34*de);O(f0*1.2,f0,.03,.34*de).connect(g);
-    g2=G();E(g2,lv*.2,.11*de);O(f0*2.32,f0*2.26,.02,.11*de).connect(g2);
+    g=G();E(g,lv*.8,.46*de);O(f0*1.2,f0,.03,.46*de).connect(g);
+    g2=G();E(g2,lv*(.08+.34*br),.11*de);O(f0*2.32,f0*2.26,.02,.11*de).connect(g2);
     g3=G();E(g3,lv*.14,.012);f=F('bandpass',f0*5,1);N(.012).connect(f);f.connect(g3);
   }else if(s==='s'){ /* slap : sec, aigu, avec un claquement de bruit */
     g=G();E(g,lv*.7,.085*de);O(f0*1.8,f0*1.55,.02,.085*de).connect(g);
@@ -1529,6 +1549,63 @@ function congaHit(d,s,vel){
   if(!ctx)initAudio();if(!ctx)return;if(ctx.state!=='running')wake();
   conga(d,s,vel,ctx.currentTime);
 }
+/* Frappe sur la peau : r = distance au centre (0) rapportée au bord (1).
+   Centre = basse, milieu = note ouverte, bord = slap, avec un fondu entre les zones.
+   muted = une autre main est déjà posée sur la même peau. */
+function sstep(a,b,x){x=Math.max(0,Math.min(1,(x-a)/(b-a)));return x*x*(3-2*x)}
+function congaMix(r){var ws=sstep(.68,.84,r),wb=1-sstep(.25,.41,r);return {b:wb,s:ws,o:Math.max(0,1-ws-wb)}}
+function congaAt(d,r,muted,vel){
+  r=Math.max(0,Math.min(1,r));
+  if(NET.role==='guest'){netSend({t:'cg',d:d,r:Math.round(r*100)/100,mu:muted?1:0,v:Math.round(vel*100)/100});return}
+  if(!ctx)initAudio();if(!ctx)return;if(ctx.state!=='running')wake();
+  var w=congaMix(r),t=ctx.currentTime;
+  if(muted){if(w.b+w.o>.05)conga(d,'m',vel*(w.b+w.o),t);if(w.s>.05)conga(d,'s',vel*w.s*.7,t);return}
+  if(w.b>.05)conga(d,'b',vel*w.b,t);
+  if(w.o>.05)conga(d,'o',vel*w.o,t,(r-.33)/.43);
+  if(w.s>.05)conga(d,'s',vel*w.s,t);
+}
+var CV='pads';try{if(localStorage.getItem('lst-cview')==='skin')CV='skin'}catch(e){}
+function renderCV(){
+  var sk=CV==='skin';$('cpads').hidden=sk;$('cskins').hidden=!sk;
+  $('cv-pads').setAttribute('aria-pressed',!sk);$('cv-skin').setAttribute('aria-pressed',sk);
+  $('c-hint').textContent=sk?'Le son dépend de l\'endroit frappé : centre = basse, milieu = note ouverte, bord = slap. Pour étouffer, garde un doigt posé sur la peau et frappe avec un autre.'
+    :'Instrument joué en direct, sans séquence. Chaque colonne est un fût, chaque ligne une frappe. Joue à plusieurs doigts, ou glisse d\'un pad à l\'autre pour enchaîner.';
+}
+['pads','skin'].forEach(function(v){$('cv-'+v).onclick=function(){CV=v;try{localStorage.setItem('lst-cview',v)}catch(e){}renderCV()}});
+(function(){
+  var box=$('cskins'),held={},K=[.9,1,1.1],NS='http://www.w3.org/2000/svg';
+  CG.forEach(function(dr,d){
+    var lugs='',i;for(i=0;i<6;i++)lugs+='<rect x="93" y="0" width="14" height="15" rx="2.5" fill="var(--cg-lug)" transform="rotate('+(i*60+30)+' 100 100)"/>';
+    var w=document.createElement('figure');w.className='cdw';w.style.setProperty('--k',K[d]);
+    w.innerHTML='<svg class="cdrum" id="cs-'+d+'" data-d="'+d+'" viewBox="0 0 200 204" role="button" tabindex="0" aria-label="'+dr.n+' : centre basse, milieu note ouverte, bord slap">'
+      +'<defs><radialGradient id="cgs'+d+'" cx="42%" cy="36%" r="72%"><stop offset="0" stop-color="var(--cg-skin-hi)"/><stop offset=".55" stop-color="var(--cg-skin)"/><stop offset="1" stop-color="var(--cg-skin-lo)"/></radialGradient></defs>'
+      +'<circle cx="100" cy="105" r="97" fill="var(--cg-shade)"/><circle cx="100" cy="100" r="97" fill="var(--cg-wood)"/>'+lugs
+      +'<circle cx="100" cy="100" r="90" fill="var(--cg-hoop)"/><circle cx="100" cy="100" r="82" fill="url(#cgs'+d+')"/>'
+      +'<circle cx="100" cy="100" r="82" fill="none" stroke="var(--cg-ink)" stroke-opacity=".25" stroke-width="1.5"/>'
+      +'<circle cx="100" cy="100" r="24" fill="var(--cg-ink)" fill-opacity=".07"/>'
+      +'<circle class="cgg" cx="100" cy="100" r="27"/><circle class="cgg" cx="100" cy="100" r="62"/>'
+      +'<circle class="cgr" cx="100" cy="100" r="9"/></svg><figcaption class="lbl">'+dr.n+'</figcaption>';
+    box.appendChild(w);
+    w.firstChild.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.repeat){e.preventDefault();strike(this,0,0,.55)}});
+  });
+  function strike(svg,ux,uy,r){ /* ux, uy : position dans le dessin, de -1 à 1 */
+    var d=+svg.getAttribute('data-d'),muted=false,id;for(id in held)if(held[id]===d)muted=true;
+    congaAt(d,r,muted,.78+Math.random()*.22);
+    var c=svg.querySelector('.cgr');c.setAttribute('cx',100+ux*100);c.setAttribute('cy',100+uy*100);c.classList.remove('go');void c.getBoundingClientRect();c.classList.add('go');
+    return d;
+  }
+  box.addEventListener('pointerdown',function(e){
+    var svg=e.target&&e.target.closest?e.target.closest('.cdrum'):null;if(!svg)return;
+    var rc=svg.getBoundingClientRect(),half=rc.width/2,ux=(e.clientX-rc.left-half)/half,uy=(e.clientY-rc.top-half)/half,dist=Math.sqrt(ux*ux+uy*uy);
+    if(dist>.98)return; /* en dehors du fût */
+    e.preventDefault();try{box.setPointerCapture(e.pointerId)}catch(x){}
+    var d=strike(svg,ux,uy,Math.min(1,dist/.82));held[e.pointerId]=d;
+  });
+  function up(e){delete held[e.pointerId]}
+  box.addEventListener('pointerup',up);box.addEventListener('pointercancel',up);box.addEventListener('lostpointercapture',up);
+  box.addEventListener('contextmenu',function(e){e.preventDefault()});
+})();
+renderCV();
 (function(){
   var box=$('cpads'),held={};
   CST.forEach(function(st){CG.forEach(function(dr,d){
@@ -1580,7 +1657,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var PROTO=2,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
+var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
 function nmsg(m){$('n-msg').textContent=m||''}
@@ -1675,7 +1752,10 @@ function hostRx(c,m){
     case 'lp':if(k>=0&&k<3&&lbuf[k])lpad(k);break;
     case 'lc':if(k>=0&&k<3)lclear(k);break;
     case 'lf':hostFile(c,m);break;
-    case 'cg':if(m.d>=0&&m.d<3&&'osmb'.indexOf(m.s)>=0&&String(m.s).length===1)congaHit(m.d|0,m.s,Math.max(.1,Math.min(1,+m.v||.8)));break;
+    case 'cg':
+      if(!(m.d>=0&&m.d<3))break;var cv=Math.max(.1,Math.min(1,+m.v||.8));
+      if(typeof m.r==='number'&&isFinite(m.r))congaAt(m.d|0,m.r,!!m.mu,cv);
+      else if(typeof m.s==='string'&&m.s.length===1&&'osmb'.indexOf(m.s)>=0)congaHit(m.d|0,m.s,cv);break;
   }
 }
 function hostFile(c,m){
