@@ -193,6 +193,10 @@ html.fsl,html.fsl body{overflow:hidden}
 /* cue : préparation privée d'un instrument chez un invité, avant envoi au master */
 .cuebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .cuest{flex:1 1 150px;min-width:0}
+.cuemon{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px;border:1px dashed var(--zc);border-radius:6px}
+.cuemon[hidden]{display:none}
+.cuelv{flex:1 1 60px;min-width:40px;max-width:160px}
+.cuemh{flex:1 1 100%;font-size:12px}
 .zone.cue{box-shadow:inset 0 0 0 2px var(--zc)}
 .zone.cue>.cuebar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + 40px);z-index:4;margin-inline:-6px;padding:8px;border:1px dashed var(--zc);border-radius:6px;background:color-mix(in srgb,var(--zc) 16%,var(--panel))}
 .zone.cue .zt span::after{content:" · CUE"}
@@ -787,7 +791,7 @@ function lrate(v){return Math.pow(2,(v-.5)*2)}
 var L={bars:2,sel:0,slots:[0,1,2].map(function(){return {vol:.8,start:0,rate:.5,mute:false,rev:false}})};
 var B={ftype:'lowpass',lfoT:'cut',preset:''};
 var NET={role:'solo',applying:false,up:false,n:0,pm:null,wait:false,denied:false}; /* solo, host (produit le son) ou guest (télécommande) */
-var CUE={b:false,y:false,d:false}; /* chez un invité : instruments en préparation privée */
+var CUE={b:false,y:false,d:false}; /* instruments en préparation privée sur cet appareil */
 var BKEYS=['cutoff','res','env','decay','accent','att','adec','rel','drive','bsub','blfor','blfod','bdly','brev'];
 var DN=['BD','SD','LT','HT','RS','CP','CH','OH'];
 var INS={bd:['BD','Kick'],sd:['SD','Caisse claire 909'],s8:['S8','Caisse claire 808'],lt:['LT','Tom bas'],mt:['MT','Tom médium'],ht:['HT','Tom haut'],
@@ -822,64 +826,125 @@ if(D.kick===undefined)D.kick='classic';
 if(!Array.isArray(D.inst)||D.inst.length!==8||D.inst.some(function(i){return !INS[i]}))D.inst=KITS.classic.slice();
 if(!Y.ftype)Y.ftype='lowpass';if(!Y.lfoT)Y.lfoT='cut';if(!Y.chord)Y.chord='off';if(Y.preset===undefined)Y.preset='';
 var saveT=0;
-function saveNow(){clearTimeout(saveT);if(NET.role==='guest')return;try{localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),D:D,Y:Y,L:L,B:B}))}catch(e){}}
-function save(){netSync();if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(saveNow,400)}
+function saveNow(){clearTimeout(saveT);if(NET.role==='guest')return; /* on enregistre l'état du master, jamais un cue en préparation */
+  inMaster(function(){try{localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),D:D,Y:Y,L:L,B:B}))}catch(e){}})}
+var cueUT=0;
+function save(){netSync();if(cueAny()){clearTimeout(cueUT);cueUT=setTimeout(cueUI,80)}if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(saveNow,400)}
 
 /* ---------- moteur audio ---------- */
 var ctx=null,osc,f1,f2,vca,pre,shaper,post,master,analyser,scopeBuf;
 var liveB=0,liveY=0,gateOpen=false,playing=false,timer=null,nextTime=0,cur=0,queue=[],playStep=-1;
 
 function curve(k){var n=1024,c=new Float32Array(n);for(var i=0;i<n;i++){var x=i*2/(n-1)-1;c[i]=Math.tanh(k*x)/Math.tanh(k)}return c}
+/* Deux moteurs identiques (basse, synthé, rythmes, delay, reverb). Le 0 est le master : il joue ce qui est en place.
+   Le 1 sert au cue : il joue ce qu'on prépare, sur sa propre sortie. Les fonctions de jeu (trigger, hit, ytrig…)
+   travaillent sur les variables de nœuds ci-dessus ; engUse() y place les nœuds de l'un ou de l'autre moteur. */
+var ENG=[null,null],engCur=0,W=0,irBuf=null,outMain=null,cueOut=null,cueAn=null,dirG=null,cueDirG=null,splitG=null;
+function mkEng(out){
+  function G(v){var x=ctx.createGain();if(v!=null)x.gain.value=v;return x}
+  function O(type){var x=ctx.createOscillator();if(type)x.type=type;return x}
+  var e={liveB:0,liveY:0,gateOpen:false,yGate:false,lastD:-1,lastY:-1,lastK:-1,kLast:null,ohG:null};
+  e.duck=G();e.duck.connect(out);
+  e.dly=ctx.createDelay(2);e.dfb=G(.42);e.dly.connect(e.dfb);e.dfb.connect(e.dly);e.dly.connect(out);
+  e.conv=ctx.createConvolver();e.conv.buffer=irBuf;e.conv.connect(out);
+  /* basse */
+  e.bfq=ctx.createConstantSource();e.bfq.offset.value=110;e.osc=O(wave);e.osc.frequency.value=0;e.bfq.connect(e.osc.frequency);
+  e.f1=ctx.createBiquadFilter();e.f2=ctx.createBiquadFilter();e.f1.type=e.f2.type='lowpass';
+  e.vca=G(0);e.pre=G();e.shaper=ctx.createWaveShaper();e.shaper.oversample='2x';e.post=G();e.master=G();
+  e.osc.connect(e.f1);e.f1.connect(e.f2);e.f2.connect(e.vca);e.vca.connect(e.pre);e.pre.connect(e.shaper);e.shaper.connect(e.post);e.post.connect(e.master);e.master.connect(e.duck);
+  e.bSub=O('sine');e.bSub.frequency.value=0;var bh=G(.5);e.bfq.connect(bh);bh.connect(e.bSub.frequency);e.bsubg=G(0);e.bSub.connect(e.bsubg);e.bsubg.connect(e.f1);
+  e.blfo=O();e.blfoF=G(0);e.blfoP=G(0);e.blfo.connect(e.blfoF);e.blfoF.connect(e.f1.detune);e.blfoF.connect(e.f2.detune);e.blfo.connect(e.blfoP);e.blfoP.connect(e.osc.detune);e.blfoP.connect(e.bSub.detune);
+  e.bsd=G();e.bsr=G();e.master.connect(e.bsd);e.bsd.connect(e.dly);e.master.connect(e.bsr);e.bsr.connect(e.conv);
+  /* rythmes */
+  e.drumBus=G();e.drumBus.connect(out);e.kickIn=G();e.kshaper=ctx.createWaveShaper();e.kshaper.oversample='2x';e.klp=ctx.createBiquadFilter();e.klp.type='lowpass';e.klp.frequency.value=5500;
+  e.kickOut=G();e.kickBus=G();e.kickIn.connect(e.kshaper);e.kshaper.connect(e.klp);e.klp.connect(e.kickOut);e.kickOut.connect(e.kickBus);e.kickBus.connect(out);
+  e.dsend=G();e.rsend=G();e.drumBus.connect(e.dsend);e.dsend.connect(e.dly);e.drumBus.connect(e.rsend);e.rsend.connect(e.conv);
+  /* synthé */
+  e.yA=O();e.yB=O();e.ymx=G(.5);e.yf=ctx.createBiquadFilter();e.yf.type='lowpass';e.yvca=G(0);e.ygain=G();e.ysd=G();e.ysr=G();e.ypre=G();e.yshp=ctx.createWaveShaper();
+  e.yA.connect(e.ymx);e.yB.connect(e.ymx);e.ymx.connect(e.yf);e.yf.connect(e.yvca);e.yvca.connect(e.ypre);e.ypre.connect(e.yshp);e.yshp.connect(e.ygain);e.ygain.connect(e.duck);
+  e.ygain.connect(e.ysd);e.ysd.connect(e.dly);e.ygain.connect(e.ysr);e.ysr.connect(e.conv);
+  e.ySub=O('sine');e.ysubg=G(0);e.ySub.connect(e.ysubg);e.ysubg.connect(e.ymx);
+  e.yC=O();e.yD=O();e.ychg=G(0);e.yC.connect(e.ychg);e.yD.connect(e.ychg);e.ychg.connect(e.ymx);
+  e.yN=ctx.createBufferSource();e.yN.buffer=noiseBuf;e.yN.loop=true;e.ynz=G(0);e.yN.connect(e.ynz);e.ynz.connect(e.ymx);
+  e.ylfo=O();e.ylfoF=G(0);e.ylfoP=G(0);e.ylfo.connect(e.ylfoF);e.ylfoF.connect(e.yf.detune);e.ylfo.connect(e.ylfoP);[e.yA,e.yB,e.yC,e.yD,e.ySub].forEach(function(o){e.ylfoP.connect(o.detune)});
+  [e.bfq,e.osc,e.bSub,e.blfo,e.yA,e.yB,e.ySub,e.yC,e.yD,e.yN,e.ylfo].forEach(function(o){o.start()});
+  return e;
+}
+function engLoad(e){
+  duck=e.duck;dly=e.dly;dfb=e.dfb;conv=e.conv;
+  bfq=e.bfq;osc=e.osc;f1=e.f1;f2=e.f2;vca=e.vca;pre=e.pre;shaper=e.shaper;post=e.post;master=e.master;bSub=e.bSub;bsubg=e.bsubg;blfo=e.blfo;blfoF=e.blfoF;blfoP=e.blfoP;bsd=e.bsd;bsr=e.bsr;
+  drumBus=e.drumBus;kickIn=e.kickIn;kshaper=e.kshaper;klp=e.klp;kickOut=e.kickOut;kickBus=e.kickBus;dsend=e.dsend;rsend=e.rsend;
+  yA=e.yA;yB=e.yB;ymx=e.ymx;yf=e.yf;yvca=e.yvca;ygain=e.ygain;ysd=e.ysd;ysr=e.ysr;ypre=e.ypre;yshp=e.yshp;ySub=e.ySub;ysubg=e.ysubg;yC=e.yC;yD=e.yD;ychg=e.ychg;yN=e.yN;ynz=e.ynz;ylfo=e.ylfo;ylfoF=e.ylfoF;ylfoP=e.ylfoP;
+  liveB=e.liveB;liveY=e.liveY;gateOpen=e.gateOpen;yGate=e.yGate;lastD=e.lastD;lastY=e.lastY;lastK=e.lastK;kLast=e.kLast;ohG=e.ohG;
+}
+function engUse(n){
+  var o=ENG[engCur],e=ENG[n];if(n===engCur||!e||!o)return;
+  o.liveB=liveB;o.liveY=liveY;o.gateOpen=gateOpen;o.yGate=yGate;o.lastD=lastD;o.lastY=lastY;o.lastK=lastK;o.kLast=kLast;o.ohG=ohG;
+  engCur=n;engLoad(e);
+}
+function cueAny(){return CUE.b||CUE.y||CUE.d}
 function initAudio(){
-  if(NET.role==='guest')return; /* un invité ne produit aucun son */
+  if(NET.role==='guest'&&!cueAny())return; /* un invité ne produit du son que pour son cue */
   unmute();
   if(ctx){wake();return}
   var AC=window.AudioContext||window.webkitAudioContext;
   if(!AC){audioMsg('Audio non pris en charge par ce navigateur');return}
   try{ctx=new AC({latencyHint:'interactive'})}catch(e){ctx=new AC()}ctx.onstatechange=audioState;
-  bfq=ctx.createConstantSource();bfq.offset.value=110;osc=ctx.createOscillator();osc.type=wave;osc.frequency.value=0;bfq.connect(osc.frequency);
-  f1=ctx.createBiquadFilter();f2=ctx.createBiquadFilter();f1.type=f2.type='lowpass';
-  vca=ctx.createGain();vca.gain.value=0;
-  pre=ctx.createGain();shaper=ctx.createWaveShaper();shaper.oversample='2x';post=ctx.createGain();
-  master=ctx.createGain();analyser=ctx.createAnalyser();analyser.fftSize=1024;scopeBuf=new Uint8Array(analyser.fftSize);
-  osc.connect(f1);f1.connect(f2);f2.connect(vca);vca.connect(pre);pre.connect(shaper);shaper.connect(post);post.connect(master);
-  mix=ctx.createGain();mix.gain.value=.7;comp=ctx.createDynamicsCompressor();comp.threshold.value=-10;comp.ratio.value=5;comp.attack.value=.004;comp.release.value=.16;
-  drumBus=ctx.createGain();dsend=ctx.createGain();dly=ctx.createDelay(2);dfb=ctx.createGain();dfb.gain.value=.42;rsend=ctx.createGain();conv=ctx.createConvolver();
-  var sr=ctx.sampleRate,il=Math.floor(sr*1.1),ib=ctx.createBuffer(2,il,sr);
-  for(var c=0;c<2;c++){var da=ib.getChannelData(c);for(var q=0;q<il;q++)da[q]=(Math.random()*2-1)*Math.pow(1-q/il,3)}
-  conv.buffer=ib;
+  function G(v){var x=ctx.createGain();if(v!=null)x.gain.value=v;return x}
+  var sr=ctx.sampleRate,il=Math.floor(sr*1.1);irBuf=ctx.createBuffer(2,il,sr);
+  for(var c=0;c<2;c++){var da=irBuf.getChannelData(c);for(var q=0;q<il;q++)da[q]=(Math.random()*2-1)*Math.pow(1-q/il,3)}
   noiseBuf=ctx.createBuffer(1,sr*2,sr);var nd=noiseBuf.getChannelData(0);for(var q2=0;q2<nd.length;q2++)nd[q2]=Math.random()*2-1;
-  duck=ctx.createGain();master.connect(duck);duck.connect(mix);drumBus.connect(mix);
-  kickIn=ctx.createGain();kshaper=ctx.createWaveShaper();kshaper.oversample='2x';klp=ctx.createBiquadFilter();klp.type='lowpass';klp.frequency.value=5500;
-  kickOut=ctx.createGain();kickBus=ctx.createGain();kickIn.connect(kshaper);kshaper.connect(klp);klp.connect(kickOut);kickOut.connect(kickBus);kickBus.connect(mix);
-  drumBus.connect(dsend);dsend.connect(dly);dly.connect(dfb);dfb.connect(dly);dly.connect(mix);
-  drumBus.connect(rsend);rsend.connect(conv);conv.connect(mix);
-  yA=ctx.createOscillator();yB=ctx.createOscillator();ymx=ctx.createGain();ymx.gain.value=.5;
-  yf=ctx.createBiquadFilter();yf.type='lowpass';yvca=ctx.createGain();yvca.gain.value=0;ygain=ctx.createGain();ysd=ctx.createGain();ysr=ctx.createGain();
-  yA.connect(ymx);yB.connect(ymx);ymx.connect(yf);yf.connect(yvca);ypre=ctx.createGain();yshp=ctx.createWaveShaper();yvca.connect(ypre);ypre.connect(yshp);yshp.connect(ygain);ygain.connect(duck);
-  ygain.connect(ysd);ysd.connect(dly);ygain.connect(ysr);ysr.connect(conv);
-  ySub=ctx.createOscillator();ySub.type='sine';ysubg=ctx.createGain();ysubg.gain.value=0;ySub.connect(ysubg);ysubg.connect(ymx);
-  yC=ctx.createOscillator();yD=ctx.createOscillator();ychg=ctx.createGain();ychg.gain.value=0;yC.connect(ychg);yD.connect(ychg);ychg.connect(ymx);
-  yN=ctx.createBufferSource();yN.buffer=noiseBuf;yN.loop=true;ynz=ctx.createGain();ynz.gain.value=0;yN.connect(ynz);ynz.connect(ymx);
-  ylfo=ctx.createOscillator();ylfoF=ctx.createGain();ylfoF.gain.value=0;ylfoP=ctx.createGain();ylfoP.gain.value=0;
-  ylfo.connect(ylfoF);ylfoF.connect(yf.detune);ylfo.connect(ylfoP);[yA,yB,yC,yD,ySub].forEach(function(o){ylfoP.connect(o.detune)});
-  [yA,yB,ySub,yC,yD,yN,ylfo].forEach(function(o){o.start()});
-  lbus=ctx.createGain();lbus.connect(mix);lsd=ctx.createGain();lsr=ctx.createGain();lbus.connect(lsd);lsd.connect(dly);lbus.connect(lsr);lsr.connect(conv);
-  lg=[0,1,2].map(function(){var x=ctx.createGain();x.connect(lbus);return x});
-  var og=ctx.createGain();og.gain.value=.8;var lim=ctx.createWaveShaper();lim.curve=curve(1.6);
-  mix.connect(comp);comp.connect(og);og.connect(lim);lim.connect(analyser);analyser.connect(ctx.destination);
-  bSub=ctx.createOscillator();bSub.type='sine';bSub.frequency.value=0;var bh=ctx.createGain();bh.gain.value=.5;bfq.connect(bh);bh.connect(bSub.frequency);
-  bsubg=ctx.createGain();bsubg.gain.value=0;bSub.connect(bsubg);bsubg.connect(f1);
-  blfo=ctx.createOscillator();blfoF=ctx.createGain();blfoF.gain.value=0;blfoP=ctx.createGain();blfoP.gain.value=0;
-  blfo.connect(blfoF);blfoF.connect(f1.detune);blfoF.connect(f2.detune);blfo.connect(blfoP);blfoP.connect(osc.detune);blfoP.connect(bSub.detune);
-  bsd=ctx.createGain();bsr=ctx.createGain();master.connect(bsd);bsd.connect(dly);master.connect(bsr);bsr.connect(conv);
-  var dm=ctx.createGain();drumBus.connect(dm);kickBus.connect(dm);
-  cbus=ctx.createGain();cbus.connect(mix);csd=ctx.createGain();csr=ctx.createGain();cbus.connect(csd);csd.connect(dly);cbus.connect(csr);csr.connect(conv);
-  zan={b:master,y:ygain,l:lbus,d:dm,c:cbus};Object.keys(zan).forEach(function(k){var a=ctx.createAnalyser();a.fftSize=256;zan[k].connect(a);zan[k]=a});
+  mix=G(.7);comp=ctx.createDynamicsCompressor();comp.threshold.value=-10;comp.ratio.value=5;comp.attack.value=.004;comp.release.value=.16;
+  analyser=ctx.createAnalyser();analyser.fftSize=1024;scopeBuf=new Uint8Array(analyser.fftSize);
+  ENG[0]=mkEng(mix);engCur=0;engLoad(ENG[0]);
+  lbus=G();lbus.connect(mix);lsd=G();lsr=G();lbus.connect(lsd);lsd.connect(dly);lbus.connect(lsr);lsr.connect(conv);
+  lg=[0,1,2].map(function(){var x=G();x.connect(lbus);return x});
+  cbus=G();cbus.connect(mix);csd=G();csr=G();cbus.connect(csd);csd.connect(dly);cbus.connect(csr);csr.connect(conv);
+  var og=G(.8),lim=ctx.createWaveShaper();lim.curve=curve(1.6);
+  mix.connect(comp);comp.connect(og);og.connect(lim);lim.connect(analyser);
+  /* sortie : master et cue en direct, ou en split (master à gauche, cue à droite) */
+  outMain=G();analyser.connect(outMain);cueOut=G();dirG=G(1);cueDirG=G(0);splitG=G(0);
+  outMain.connect(dirG);dirG.connect(ctx.destination);cueOut.connect(cueDirG);cueDirG.connect(ctx.destination);
+  var mL=G(),mR=G(),mrg=ctx.createChannelMerger(2);
+  [mL,mR].forEach(function(x){x.channelCount=1;x.channelCountMode='explicit';x.channelInterpretation='speakers'});
+  outMain.connect(mL);cueOut.connect(mR);mL.connect(mrg,0,0);mR.connect(mrg,0,1);mrg.connect(splitG);splitG.connect(ctx.destination);
+  if(NET.role!=='guest'){
+    var dm=G();drumBus.connect(dm);kickBus.connect(dm);
+    zan={b:master,y:ygain,l:lbus,d:dm,c:cbus};Object.keys(zan).forEach(function(k){var a=ctx.createAnalyser();a.fftSize=256;zan[k].connect(a);zan[k]=a});
+  }
   zbuf=new Float32Array(256);
-  bfq.start();bSub.start();blfo.start();
-  osc.start();applyParams();wake();audioState();
+  if(cueAny())cueEng();
+  applyParams();routeOut();wake();audioState();
 }
+function cueEng(){
+  if(!ctx||ENG[1])return;
+  var cm=ctx.createGain();cm.gain.value=.6;var cl=ctx.createWaveShaper();cl.curve=curve(1.6);
+  ENG[1]=mkEng(cm);cm.connect(cl);cl.connect(cueOut);
+  cueAn=ctx.createAnalyser();cueAn.fftSize=256;cueOut.connect(cueAn);
+}
+/* Où s'entend le cue : 'mix' (sortie de l'appareil), 'split' (master à gauche, cue à droite) ou 'off'. */
+var MON='mix';try{var mon0=localStorage.getItem('lst-cuemon');if(mon0==='off'||mon0==='split')MON=mon0}catch(e){}
+function routeOut(){
+  if(!ctx)return;var t=ctx.currentTime,split=MON==='split'&&NET.role!=='guest'&&cueAny();
+  dirG.gain.setTargetAtTime(split?0:1,t,.01);splitG.gain.setTargetAtTime(split?1:0,t,.01);
+  cueDirG.gain.setTargetAtTime(!split&&MON!=='off'&&cueAny()?1:0,t,.01);
+}
+function outLat(){return ctx?Math.round(((ctx.baseLatency||0)+(ctx.outputLatency||0))*1000):0}
+/* Exécute fn sur le moteur du cue, avec l'état affiché à l'écran. */
+function inCue(fn){
+  if(!ENG[1])return;if(W)return fn();
+  var gs=WSg;if(gs)gs.forEach(stSwap);
+  engUse(1);W=1;try{return fn()}finally{W=0;engUse(0);if(gs)gs.forEach(stSwap)}
+}
+/* Exécute fn avec l'état du master : pour un instrument en cue sur cet appareil, c'est l'état mis de côté, pas celui de l'écran. */
+var WSg=null;
+function inMaster(fn){
+  if(WSg||W||NET.role==='guest')return fn();
+  var gs=['b','y','d'].filter(function(g){return CUE[g]&&cueM[g]});if(!gs.length)return fn();
+  WSg=gs;gs.forEach(stSwap);try{return fn()}finally{gs.forEach(stSwap);WSg=null}
+}
+function cueRun(fn){initAudio();if(!ctx)return;cueEng();inCue(fn)}
+function cueQuiet(){if(!ctx||!ENG[1])return;inCue(function(){var t=ctx.currentTime;vca.gain.cancelScheduledValues(t);gateOff(t);yOff(t)})}
 /* iOS : le commutateur silencieux coupe le Web Audio. On bascule la session en mode lecture
    et on joue un silence en boucle dans une balise audio, ce qui route le son sur le canal média. */
 var silent=null;
@@ -892,11 +957,17 @@ function wake(){if(ctx&&ctx.state!=='running'){var p=ctx.resume();if(p&&p.then)p
 function audioMsg(m){var a=$('astate');a.textContent=m;if(m==='Audio actif')a.setAttribute('data-ok','');else a.removeAttribute('data-ok')}
 function audioState(){
   if(!ctx)return;
+  if(NET.role==='guest'){audioMsg(!cueAny()?'Télécommande : le son sort sur le master':ctx.state==='running'?'Cue : écoute sur cet appareil':'Audio bloqué : touche de nouveau l\'écran');return}
   audioMsg(ctx.state==='running'?'Audio actif':'Audio bloqué par le navigateur : touche de nouveau Lecture');
   if(ctx.state==='running'&&playing&&nextTime<ctx.currentTime){nextTime=ctx.currentTime+.06}
 }
 function applyParams(){
-  if(!ctx)return;var t=ctx.currentTime,base=cutHz(P.cutoff);
+  if(!ctx)return;
+  if(NET.role!=='guest')inMaster(apply0);
+  if(ENG[1]&&cueAny())inCue(apply0);
+}
+function apply0(){
+  var t=ctx.currentTime,base=cutHz(P.cutoff);
   osc.type=wave;
   if(!playing){f1.frequency.setTargetAtTime(base,t,.02);f2.frequency.setTargetAtTime(base,t,.02)}
   f1.Q.setTargetAtTime(P.res*20,t,.02);f2.Q.setTargetAtTime(P.res*6,t,.02);
@@ -933,7 +1004,7 @@ function trigger(st,t){
 function gateOff(t){vca.gain.cancelScheduledValues(t);vca.gain.setTargetAtTime(0,t,relTau(P.rel));gateOpen=false}
 function schedule(bi,i,t){
   var st=pat[bi],next=pat[(bi+1)%BL],dur=60/bpmOf(P.tempo)/4;
-  queue.push({i:i,b:bi,t:t});
+  if(!W)queue.push({i:i,b:bi,t:t});
   if(liveB>0)return;
   if(st.g===0){if(gateOpen)gateOff(t);return}
   if(st.g===2){if(gateOpen&&next.g!==2)gateOff(t+dur*.55);return}
@@ -945,19 +1016,30 @@ function schedule(bi,i,t){
 function tick(){
   while(nextTime<ctx.currentTime+.22){
     var d=60/bpmOf(P.tempo)/4,tt=nextTime+(cur%2?P.shuffle*d*.4:0);
-    try{schedule(BL===32?(bar%2)*16+cur:cur,cur,tt);drums(cur,tt);ysched(Y.len===32?(bar%2)*16+cur:cur,tt);lsched(cur,bar,tt,d)}catch(e){audioMsg('Erreur audio ignorée : '+e.message)}nextTime+=d;cur=(cur+1)%16;
+    try{step(cur,bar,tt,d)}catch(e){audioMsg('Erreur audio ignorée : '+e.message)}nextTime+=d;cur=(cur+1)%16;
     if(cur===0){bar++;if(fillArmed){fillArmed=false;$('fill').setAttribute('aria-pressed',false)}netQueued()}
   }
   timer=setTimeout(tick,25);
 }
-function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;playing=true;gateOpen=false;queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
-function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vca.gain.cancelScheduledValues(t);gateOff(t)}queue=[];playStep=-1;playB=-1;playY=-1;if(ctx)yOff(ctx.currentTime);lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
-function audition(st){
+/* Un pas : d'abord le master, puis, si un instrument est en cue sur cet appareil, sa version en préparation. */
+function step(c,b,t,d){
+  inMaster(function(){schedule(BL===32?(b%2)*16+c:c,c,t);drums(c,t);ysched(Y.len===32?(b%2)*16+c:c,t);lsched(c,b,t,d)});
+  var q=queue[queue.length-1];
+  if(q){q.n=b;if(CUE.b)q.ub=BL===32?(b%2)*16+c:c;if(CUE.y)q.uy=Y.len===32?(b%2)*16+c:c;if(CUE.d)q.uv=D.chain?(b%2?'B':'A'):D.v}
+  if(cueAny()&&ENG[1])cueStep(c,b,t);
+  if(NET.role==='host'&&conns.length)netSend({t:'ck',i:c,n:b,d:Math.round((t-ctx.currentTime)*1000),l:outLat()});
+}
+function cueStep(c,b,t){
+  inCue(function(){if(CUE.b)schedule(BL===32?(b%2)*16+c:c,c,t);if(CUE.d)drums(c,t);if(CUE.y)ysched(Y.len===32?(b%2)*16+c:c,t)});
+}
+function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;playing=true;gateOpen=false;if(ENG[1])ENG[1].gateOpen=false;queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
+function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vca.gain.cancelScheduledValues(t);gateOff(t)}queue=[];playStep=-1;playB=-1;playY=-1;if(ctx)yOff(ctx.currentTime);cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
+function audition(st,remote){
   if(playing||st.g!==1)return;
-  if(NET.role==='guest'){if(!CUE.b)netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0});return}
-  initAudio();if(!ctx)return;var t=ctx.currentTime+.01;
-  bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);
-  vca.gain.setTargetAtTime(0,t+.22,.01);
+  function go(){var t=ctx.currentTime+.01;bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);vca.gain.setTargetAtTime(0,t+.22,.01)}
+  if(!remote&&CUE.b){cueRun(go);return} /* instrument en cue : la note ne sort que sur l'écoute du cue */
+  if(NET.role==='guest'){netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0});return}
+  initAudio();if(!ctx)return;inMaster(go);
 }
 function setPlayUI(){['play','cfs-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
 
@@ -1129,10 +1211,17 @@ function zmeter(){
     if(lv!==zlv[k]){zlv[k]=lv;$('zm-'+k).style.transform='scaleX('+Math.min(1,lv).toFixed(3)+')'}
   }
 }
+var netB=-1,netY=-1,netV='A',netN=0,clv=0;
+function cmeter(){
+  var pk=0,i;cueAn.getFloatTimeDomainData(zbuf);for(i=0;i<256;i++){var v=zbuf[i]<0?-zbuf[i]:zbuf[i];if(v>pk)pk=v}
+  var lv=Math.max(pk,clv*.88);if(lv<.002)lv=0;if(lv===clv)return;clv=lv;
+  ['b','y','d'].forEach(function(g){$('cue-'+g+'-lv').style.transform='scaleX('+Math.min(1,lv).toFixed(3)+')'});
+}
 function frame(){
   if(zan)zmeter();
+  if(cueAn&&cueAn.getFloatTimeDomainData&&(clv||cueAny()))cmeter();
   if(playing&&ctx){var t=ctx.currentTime,ch=false;
-    while(queue.length&&queue[0].t<=t){var qe=queue.shift();playStep=qe.i;playB=qe.b;playY=qe.y;playVar=qe.v||D.v;ch=true}
+    while(queue.length&&queue[0].t<=t){var qe=queue.shift();playStep=qe.i;netB=qe.b;netY=qe.y;netV=qe.v||D.v;netN=qe.n|0;playB=qe.ub!=null?qe.ub:qe.b;playY=qe.uy!=null?qe.uy:qe.y;playVar=qe.uv||netV;ch=true}
     if(ch){stepEls.forEach(function(e,i){e.d.classList.toggle('on',i===playB)});drawRoll();drumStepUI();yStepUI();drawLoop();netTick()}
     drawScope();
   }
@@ -1191,13 +1280,18 @@ function hit(k,t,vel){
 }
 function drums(i,t){
   var v=D.chain?(bar%2?'B':'A'):D.v,p=D.pat[v];
-  if(queue.length)queue[queue.length-1].v=v;
-  var fill=i>=12&&(fillArmed||(D.auto>0&&(bar+1)%D.auto===0));
+  if(!W&&queue.length)queue[queue.length-1].v=v;
+  var fill=i>=12&&((!W&&fillArmed)||(D.auto>0&&(bar+1)%D.auto===0));
   for(var k=0;k<8;k++){var s=p[k][i];
     if(fill){if(k===0)s=0;else if(k===1)s=i>=14?2:1;else if(k===3&&i===12)s=2;else if(k===2&&i===14)s=2}
     if(s&&!D.mute[k])hit(k,t,s===2?1:.62)}
 }
-function tap(k,vel){if(playing)return;if(NET.role==='guest'){if(!CUE.d)netSend({t:'tp',k:k,v:vel});return}initAudio();if(ctx)hit(k,ctx.currentTime+.01,vel)}
+function tap(k,vel,remote){
+  if(playing)return;function go(){hit(k,ctx.currentTime+.01,vel)}
+  if(!remote&&CUE.d){cueRun(go);return}
+  if(NET.role==='guest'){netSend({t:'tp',k:k,v:vel});return}
+  initAudio();if(ctx)inMaster(go);
+}
 var stripEls=[],padEls=[];
 DN.forEach(function(n,k){
   var s=document.createElement('div');s.className='strip';
@@ -1315,7 +1409,7 @@ function ypitch(st,t){var f=yfreq(st),gl=P.ygl*P.ygl*.15,ch=YCH[Y.chord]||YCH.of
   [[yA,0],[yB,YINT[Math.round(P.yint*6)]],[ySub,-12],[yC,ch[0]],[yD,ch[1]]].forEach(function(v){var o=v[0],fv=f*Math.pow(2,v[1]/12);
     o.frequency.cancelScheduledValues(t);if(gl>.001)o.frequency.setTargetAtTime(fv,t,gl);else o.frequency.setValueAtTime(fv,t)})}
 function ysched(yi,t){
-  if(queue.length)queue[queue.length-1].y=yi;
+  if(!W&&queue.length)queue[queue.length-1].y=yi;
   if(liveY>0)return;
   var st=Y.pat[yi],next=Y.pat[(yi+1)%Y.len],dur=60/bpmOf(P.tempo)/4;
   if(st.g===0||Y.mute){if(yGate)yOff(t);return}
@@ -1323,7 +1417,12 @@ function ysched(yi,t){
   ypitch(st,t);ytrig(st,t);
   if(next.g===2)yGate=true;else yOff(t+dur*.8);
 }
-function ytap(st){if(playing||st.g!==1)return;if(NET.role==='guest'){if(!CUE.y)netSend({t:'au',i:'y',n:st.n,o:st.o,a:st.a?1:0});return}initAudio();if(!ctx)return;var t=ctx.currentTime+.01;ypitch(st,t);ytrig(st,t);yOff(t+.25)}
+function ytap(st,remote){
+  if(playing||st.g!==1)return;function go(){var t=ctx.currentTime+.01;ypitch(st,t);ytrig(st,t);yOff(t+.25)}
+  if(!remote&&CUE.y){cueRun(go);return}
+  if(NET.role==='guest'){netSend({t:'au',i:'y',n:st.n,o:st.o,a:st.a?1:0});return}
+  initAudio();if(!ctx)return;inMaster(go);
+}
 for(var yi=0;yi<32;yi++)(function(i){
   var d=document.createElement('div');d.className='step';
   var num=document.createElement('div');num.className='num';num.innerHTML='<span class="dot"></span>'+(i+1);
@@ -1586,7 +1685,7 @@ function drawLoop(){
 /* ---------- claviers live ---------- */
 function warm(){if(!ctx){initAudio()}else if(ctx.state!=='running')wake();document.removeEventListener('pointerdown',warm,true)}
 document.addEventListener('pointerdown',warm,true);
-function regest(){if(!ctx)return;if(ctx.state!=='running')wake();if(!silent||silent.paused)unmute()}
+function regest(){if(!ctx||(NET.role==='guest'&&!cueAny()))return;if(ctx.state!=='running')wake();if(!silent||silent.paused)unmute()}
 ['touchend','pointerup','click','keydown'].forEach(function(ev){document.addEventListener(ev,regest,true)});
 function latency(){if(!ctx)return;var l=Math.round(((ctx.baseLatency||0)+(ctx.outputLatency||0))*1000);
   var m=l>0?'Latence de sortie annoncée par l\'appareil : '+l+' ms.'+(l>60?' C\'est élevé : une sortie Bluetooth en est la cause la plus fréquente.':''):'';
@@ -1607,27 +1706,34 @@ function liveKb(boxId,on,off){
   box.addEventListener('pointerup',up);box.addEventListener('pointercancel',up);box.addEventListener('lostpointercapture',up);
   box.addEventListener('contextmenu',function(e){e.preventDefault()});
 }
-var liveH={b:{},y:{}}; /* qui tient une note sur chaque instrument : 'me' ou l'identifiant d'un invité */
+var liveH=[{b:{},y:{}},{b:{},y:{}}]; /* qui tient une note, sur le master (0) et sur le cue (1) : 'me' ou l'identifiant d'un invité */
 function liveOn(i,n,legato,o,a,src){
   if(!ctx)initAudio();if(!ctx)return;if(ctx.state!=='running')wake();
-  var h=liveH[i],was=Object.keys(h).length>0;h[src]=1;
-  var t=ctx.currentTime,st=S(1,n,o,a,0);
-  if(i==='b'){var f=freq(st);liveB=1;bfq.offset.cancelScheduledValues(t);
-    if(legato||was)bfq.offset.setTargetAtTime(f,t,.02);else{bfq.offset.setValueAtTime(f,t);trigger(st,t)}}
-  else{liveY=1;ypitch(st,t);if(!(legato||was))ytrig(st,t)}
+  var cw=src==='me'&&CUE[i]?1:0;if(cw)cueEng(); /* instrument en cue sur cet appareil : la note reste sur l'écoute du cue */
+  function go(){
+    var h=liveH[cw][i],was=Object.keys(h).length>0;h[src]=1;
+    var t=ctx.currentTime,st=S(1,n,o,a,0);
+    if(i==='b'){var f=freq(st);liveB=1;bfq.offset.cancelScheduledValues(t);
+      if(legato||was)bfq.offset.setTargetAtTime(f,t,.02);else{bfq.offset.setValueAtTime(f,t);trigger(st,t)}}
+    else{liveY=1;ypitch(st,t);if(!(legato||was))ytrig(st,t)}
+  }
+  if(cw)inCue(go);else inMaster(go);
 }
 function liveOff(i,src){
-  var h=liveH[i];if(!h[src])return;delete h[src];if(Object.keys(h).length)return;
-  if(i==='b'){liveB=0;if(ctx)gateOff(ctx.currentTime)}else{liveY=0;if(ctx)yOff(ctx.currentTime)}
+  [1,0].forEach(function(w){
+    var h=liveH[w][i];if(!h[src])return;delete h[src];if(Object.keys(h).length)return;
+    function go(){if(i==='b'){liveB=0;if(ctx)gateOff(ctx.currentTime)}else{liveY=0;if(ctx)yOff(ctx.currentTime)}}
+    if(w)inCue(go);else inMaster(go);
+  });
 }
 liveKb('lkeys-b',function(n,legato){
-  if(NET.role==='guest'){netSend({t:'nt',i:'b',n:n,lg:legato?1:0,o:B.lo||0,a:B.lacc?1:0});return}
+  if(NET.role==='guest'&&!CUE.b){netSend({t:'nt',i:'b',n:n,lg:legato?1:0,o:B.lo||0,a:B.lacc?1:0});return}
   liveOn('b',n,legato,B.lo||0,B.lacc,'me');
-},function(){if(NET.role==='guest')netSend({t:'nt',i:'b',off:1});else liveOff('b','me')});
+},function(){if(NET.role==='guest'&&!liveH[1].b.me)netSend({t:'nt',i:'b',off:1});else liveOff('b','me')});
 liveKb('lkeys-y',function(n,legato){
-  if(NET.role==='guest'){netSend({t:'nt',i:'y',n:n,lg:legato?1:0,o:Y.lo||0,a:Y.lacc?1:0});return}
+  if(NET.role==='guest'&&!CUE.y){netSend({t:'nt',i:'y',n:n,lg:legato?1:0,o:Y.lo||0,a:Y.lacc?1:0});return}
   liveOn('y',n,legato,Y.lo||0,Y.lacc,'me');
-},function(){if(NET.role==='guest')netSend({t:'nt',i:'y',off:1});else liveOff('y','me')});
+},function(){if(NET.role==='guest'&&!liveH[1].y.me)netSend({t:'nt',i:'y',off:1});else liveOff('y','me')});
 function renderLive(){
   [['b',B],['y',Y]].forEach(function(o){var v=o[1].lo||0;$('l'+o[0]+'-ol').textContent='Octave '+(v>0?'+':'')+v;$('l'+o[0]+'-acc').setAttribute('aria-pressed',!!o[1].lacc)});
 }
@@ -1811,7 +1917,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=24; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=25; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -1846,7 +1952,7 @@ var SEC={
       var s=L.slots[L.sel];P.lvol=s.vol;P.lstart=s.start;P.lrate=s.rate},
     draw:function(){['lvol','lstart','lrate'].forEach(drawKnob);renderL()}}
 };
-function snap(){for(var k in SEC)lastS[k]=JSON.stringify(SEC[k].get());for(var id in P)lastP[id]=P[id]}
+function snap(){inMaster(function(){for(var k in SEC)lastS[k]=JSON.stringify(SEC[k].get());for(var id in P)lastP[id]=P[id]})}
 /* Appelé à chaque modification locale : envoie, 30 ms plus tard, uniquement ce qui a changé. */
 function netSync(){if(NET.role==='solo'||NET.applying||syncT)return;syncT=setTimeout(netFlush,30)}
 function netFlush(){
@@ -1857,14 +1963,22 @@ function netFlush(){
   if(n)netSend(m);
   if(CUE.b||CUE.y||CUE.d)cueUI();
 }
+/* Vérifie et complète un état reçu sans l'afficher : on l'applique, on le relit, puis on remet l'état de l'écran. */
+function secNorm(k,d){
+  if((k==='pat'||k==='Y')&&!okSteps(d.pat))return '';if(k==='D'&&!okDrums(d))return '';
+  var s0=sel,y0=Y.sel,keep=JSON.stringify(SEC[k].get()),out='';
+  try{SEC[k].set(d);out=JSON.stringify(SEC[k].get())}catch(e){}
+  try{SEC[k].set(JSON.parse(keep))}catch(e){}sel=s0;Y.sel=y0;
+  return out;
+}
 function netApply(m){
   NET.applying=true;
   try{var k,ap=false;
     if(m.p)for(k in m.p){var v=+m.p[k];if(!(knobEls[k]&&!PLOC[k]&&v>=0&&v<=1))continue;
-      if(cueHold(CUEKEY[k])){cueM[CUEKEY[k]].p[k]=v;continue} /* instrument en cue : on note l'état du master sans l'afficher */
+      if(cueHold(CUEKEY[k])){var Mp=cueM[CUEKEY[k]];Mp.p[k]=v;Mp.alt=null;ap=true;continue} /* instrument en cue : on note l'état du master sans l'afficher */
       P[k]=v;lastP[k]=v;drawKnob(k);ap=true}
     if(m.s)for(k in m.s){if(!(SEC[k]&&m.s[k]&&typeof m.s[k]==='object'))continue;
-      if(cueHold(CUESEC[k])){cueM[CUESEC[k]].s[k]=JSON.stringify(m.s[k]);continue}
+      if(cueHold(CUESEC[k])){var nj=secNorm(k,m.s[k]);if(nj){var Ms=cueM[CUESEC[k]];Ms.s[k]=nj;Ms.alt=null;ap=true}continue}
       try{SEC[k].set(m.s[k])}catch(e){}lastS[k]=JSON.stringify(SEC[k].get());SEC[k].draw();ap=true}
     if(CUE.b||CUE.y||CUE.d)cueUI();
     if(ap)applyParams();
@@ -1879,7 +1993,7 @@ function netSend(m,except){
 }
 function netTo(c,m){if(c&&c.open)try{c.send(m)}catch(e){}}
 function netPlay(){if(NET.role==='host')netSend({t:'pl',on:playing?1:0})}
-function netTick(){if(NET.role==='host'&&conns.length)netSend({t:'tk',i:playStep,b:playB,y:playY,v:playVar,f:fillArmed?1:0})}
+function netTick(){if(NET.role==='host'&&conns.length)netSend({t:'tk',i:playStep,b:netB,y:netY,v:netV,n:netN,f:fillArmed?1:0})}
 function netLoop(k,c){
   if(NET.role!=='host')return;
   var m=lbuf[k]?{t:'lw',k:k,name:lname[k],dur:Math.round(lbuf[k].duration*100)/100,pk:lpk[k].map(function(v){return Math.round(v*100)/100})}:{t:'lw',k:k,clr:1};
@@ -1888,7 +2002,7 @@ function netLoop(k,c){
 function setFill(on){fillArmed=!!on;$('fill').setAttribute('aria-pressed',fillArmed);if(NET.role==='host')netSend({t:'fl',on:fillArmed?1:0})}
 function setPlaying(on){
   if(playing===on)return;playing=on;
-  if(!on){playStep=-1;playB=-1;playY=-1;renderY();renderSteps();drawRoll();renderDrums()}
+  if(!on){playStep=-1;playB=-1;playY=-1;cueQuiet();renderY();renderSteps();drawRoll();renderDrums()}
   setPlayUI();
 }
 
@@ -1906,7 +2020,7 @@ function hostRx(c,m){
       if(a&&a.ok){if(nm)a.n=nm;c._pm=a.p;c._wait=false} /* déjà accepté dans cette session : il retrouve ses accès */
       else{a=ACC[gid]={n:nm||'Invité '+(GN[gid]||(GN[gid]=++gseq)),p:'',ok:false};c._pm='';c._wait=true}
       c._n=a.n;accSave();
-      var s={},p={};for(x in SEC)s[x]=SEC[x].get();for(x in P)if(!PLOC[x])p[x]=P[x];
+      var s={},p={};inMaster(function(){for(x in SEC)s[x]=JSON.parse(JSON.stringify(SEC[x].get()));for(x in P)if(!PLOC[x])p[x]=P[x]});
       netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD,pm:c._pm,w:c._wait?1:0,nm:c._n});
       if(c._wait)reqAdd(c,'');
       if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle du master : recharge-la pour avoir toutes les fonctions.'});
@@ -1926,8 +2040,8 @@ function hostRx(c,m){
       if(m.c==='play'){if(!playing)start()}else if(m.c==='pause'){if(playing)stop()}
       else if(m.c==='rew')rew();else if(m.c==='fill')setFill(!fillArmed);break;
     case 'nt':if(m.off)liveOff(i,c._id);else liveOn(i,Math.max(0,Math.min(12,m.n|0)),!!m.lg,Math.max(-2,Math.min(2,m.o|0)),!!m.a,c._id);break;
-    case 'au':var st=S(1,Math.max(0,Math.min(12,m.n|0)),Math.max(-1,Math.min(1,m.o|0)),m.a,0);if(i==='y')ytap(st);else audition(st);break;
-    case 'tp':if(k>=0&&k<8)tap(k,m.v>.8?1:.62);break;
+    case 'au':var st=S(1,Math.max(0,Math.min(12,m.n|0)),Math.max(-1,Math.min(1,m.o|0)),m.a,0);if(i==='y')ytap(st,true);else audition(st,true);break;
+    case 'tp':if(k>=0&&k<8)tap(k,m.v>.8?1:.62,true);break;
     case 'lp':if(k>=0&&k<3&&lbuf[k])lpad(k);break;
     case 'lc':if(k>=0&&k<3)lclear(k);break;
     case 'lf':hostFile(c,m);break;
@@ -2007,8 +2121,13 @@ function guestRx(m){
     case 'fl':fillArmed=!!m.on;$('fill').setAttribute('aria-pressed',fillArmed);break;
     case 'tk':
       playStep=m.i|0;playB=m.b|0;playY=m.y|0;playVar=m.v==='B'?'B':'A';if(!playing)setPlaying(true);
+      var tn=m.n|0;if(CUE.b)playB=BL===32?(tn%2)*16+(playStep&15):playStep&15;if(CUE.y)playY=Y.len===32?(tn%2)*16+(playStep&15):playStep&15;if(CUE.d)playVar=D.chain?(tn%2?'B':'A'):D.v;
       if(fillArmed!==!!m.f){fillArmed=!!m.f;$('fill').setAttribute('aria-pressed',fillArmed)}
       stepEls.forEach(function(e,i){e.d.classList.toggle('on',i===playB)});drawRoll();drumStepUI();yStepUI();break;
+    case 'ck': /* un pas du master va sonner dans m.d ms : on joue en même temps, sur cet appareil, les instruments en cue */
+      if(!cueAny()||!ctx||!ENG[1]||ctx.state!=='running')break;
+      var ci=m.i&15,cn=m.n|0,lead=((+m.d||0)+(+m.l||0)-outLat())/1000;
+      bar=cn;cueStep(ci,cn,ctx.currentTime+Math.max(.005,Math.min(.8,lead)));break;
     case 'lw':
       if(k<0||k>2)break;
       if(m.clr||!Array.isArray(m.pk)){lpk[k]=null;linfo[k]=null;lname[k]=''}
@@ -2085,49 +2204,94 @@ function gretry(){if(NET.role!=='guest'||gT)return;gT=setTimeout(function(){gT=0
    « Envoyer » transmet tout l'instrument en un seul message ; si le master joue, il l'applique au début de la mesure suivante. */
 var CUESEC={pat:'b',B:'b',Y:'y',D:'d'},CUEKEY={},cueM={b:null,y:null,d:null},cueNote={b:'',y:'',d:''},cueT={},qst=[];
 KN.forEach(function(k){var bx=k.box||'knobs',g=bx==='knobs'&&k.id!=='tempo'?'b':bx==='yknobs'?'y':(bx==='dknobs'&&k.id!=='shuffle')||bx==='kknobs'?'d':'';if(g&&!PLOC[k.id])CUEKEY[k.id]=g});
-function cueHold(g){return !!g&&CUE[g]&&NET.role==='guest'}
+function cueHold(g){return !!g&&!!CUE[g]&&!!cueM[g]}
 function cueEach(g,fs,fp){var k;for(k in CUESEC)if(CUESEC[k]===g)fs(k);for(k in CUEKEY)if(CUEKEY[k]===g)fp(k)}
 function cueDirty(g){var d=false,M=cueM[g];if(!M)return false;
   cueEach(g,function(k){if(JSON.stringify(SEC[k].get())!==M.s[k])d=true},function(k){if(Math.abs(P[k]-M.p[k])>2e-4)d=true});return d}
 function cueClear(g,ms){clearTimeout(cueT[g]);cueT[g]=setTimeout(function(){cueNote[g]='';cueUI()},ms)}
+/* État du master pour l'instrument g, sous une forme directement échangeable avec l'état affiché. */
+function cueAlt(g){
+  var M=cueM[g],k;if(!M)return null;if(M.alt)return M.alt;
+  var a={p:{}};for(k in M.p)a.p[k]=M.p[k];
+  if(g==='b'){var s1=JSON.parse(M.s.pat),s2=JSON.parse(M.s.B);a.pat=s1.pat;a.BL=s1.BL;a.wave=s2.wave;a.ftype=s2.ftype;a.lfoT=s2.lfoT;a.preset=s2.preset}
+  else a.o=JSON.parse(M.s[g==='y'?'Y':'D']);
+  return M.alt=a;
+}
+function stSwap(g){
+  var a=cueAlt(g),t,k;if(!a)return;
+  for(k in a.p){t=P[k];P[k]=a.p[k];a.p[k]=t}
+  if(g==='b'){t=pat;pat=a.pat;a.pat=t;t=BL;BL=a.BL;a.BL=t;t=wave;wave=a.wave;a.wave=t;['ftype','lfoT','preset'].forEach(function(f){t=B[f];B[f]=a[f];a[f]=t})}
+  else{var O=g==='y'?Y:D;for(k in a.o){t=O[k];O[k]=a.o[k];a.o[k]=t}}
+}
 function cueOn(g){
-  if(NET.role!=='guest'||CUE[g]||!can(g))return;
+  if(CUE[g]||!can(g)||(NET.role==='guest'&&!NET.joined))return;
   netFlush(); /* ce qui était en attente part d'abord : le cue démarre d'un état identique au master */
-  var M=cueM[g]={s:{},p:{}};cueEach(g,function(k){M.s[k]=JSON.stringify(SEC[k].get())},function(k){M.p[k]=Math.round(P[k]*1e4)/1e4});
-  CUE[g]=true;cueNote[g]='';cueUI();
+  var M=cueM[g]={s:{},p:{},alt:null};cueEach(g,function(k){M.s[k]=JSON.stringify(SEC[k].get())},function(k){M.p[k]=Math.round(P[k]*1e4)/1e4});
+  CUE[g]=true;cueNote[g]='';
+  initAudio();cueEng();applyParams();routeOut();audioState();cueUI();
+}
+/* Le master prend l'état m pour l'instrument g. */
+function cueTake(g,m){
+  var M=cueM[g],k;
+  if(CUE[g]&&M){for(k in m.s)M.s[k]=JSON.stringify(m.s[k]);for(k in m.p)M.p[k]=m.p[k];M.alt=null;applyParams()}
+  else netApply(m); /* le cue a été quitté entre-temps : l'envoi s'applique quand même */
+  if(NET.role==='host')netSend({t:'st',s:m.s,p:m.p});
+  save();cueNote[g]='En place sur le master';cueUI();cueClear(g,3500);
 }
 function cueSend(g){
   if(!cueHold(g))return;
-  if(!(hconn&&hconn.open)){cueNote[g]='Pas de liaison avec le master';cueUI();return}
+  var guest=NET.role==='guest';
+  if(guest&&!(hconn&&hconn.open)){cueNote[g]='Pas de liaison avec le master';cueUI();return}
   var M=cueM[g],m={t:'st',s:{},p:{},q:1,g:g};
-  cueEach(g,function(k){var j=JSON.stringify(SEC[k].get());m.s[k]=JSON.parse(j);lastS[k]=j;M.s[k]=j},
-    function(k){var v=Math.round(P[k]*1e4)/1e4;m.p[k]=v;lastP[k]=P[k];M.p[k]=v});
-  netSend(m);cueNote[g]=playing?'Envoyé · entre à la prochaine mesure':'Envoyé';cueUI();cueClear(g,6000);
+  cueEach(g,function(k){var j=JSON.stringify(SEC[k].get());m.s[k]=JSON.parse(j);if(guest){lastS[k]=j;M.s[k]=j}},
+    function(k){var v=Math.round(P[k]*1e4)/1e4;m.p[k]=v;if(guest){lastP[k]=P[k];M.p[k]=v}});
+  if(guest){M.alt=null;netSend(m)}
+  else if(playing)qst.push({local:g,m:m}); /* sur le master lui-même : en place au début de la mesure suivante */
+  else{cueTake(g,m);return}
+  cueNote[g]=playing?'Envoyé · entre à la prochaine mesure':'Envoyé';cueUI();cueClear(g,6000);
 }
 function cueOff(g){
   if(!CUE[g])return;var M=cueM[g],m={s:{},p:{}},k;
+  if(ctx&&ENG[1])inCue(function(){var t=ctx.currentTime;
+    if(g==='b'){liveB=0;liveH[1].b={};vca.gain.cancelScheduledValues(t);gateOff(t)}
+    else if(g==='y'){liveY=0;liveH[1].y={};yOff(t)}
+    else if(kLast){try{kLast.gain.cancelScheduledValues(t);kLast.gain.setTargetAtTime(0,t,.01)}catch(e){}}});
   CUE[g]=false;cueNote[g]='';
   if(M){for(k in M.s)m.s[k]=JSON.parse(M.s[k]);for(k in M.p)m.p[k]=M.p[k];netApply(m)} /* retour à l'état du master : ce qui n'a pas été envoyé est abandonné */
-  cueM[g]=null;cueUI();
+  cueM[g]=null;
+  if(NET.role==='guest'&&!cueAny()&&ctx){try{ctx.suspend()}catch(e){}try{if(silent)silent.pause()}catch(e){}}
+  applyParams();routeOut();audioState();cueUI();
 }
+function setMon(v){MON=v;try{localStorage.setItem('lst-cuemon',v)}catch(e){}routeOut();cueUI()}
 function cueUI(){
-  var guest=NET.role==='guest'&&!!NET.joined;
+  var guest=NET.role==='guest',show=!guest||!!NET.joined,mon=guest&&MON==='split'?'mix':MON;
   ['b','y','d'].forEach(function(g){
-    var on=guest&&CUE[g],dirty=on&&cueDirty(g),z=document.querySelector('.'+ZK[g]);
-    $('cue-'+g).hidden=!guest;z.classList.toggle('cue',!!on);
-    $('cue-'+g+'-on').hidden=on;$('cue-'+g+'-st').hidden=!on;$('cue-'+g+'-send').hidden=!on;$('cue-'+g+'-off').hidden=!on;
+    var on=show&&CUE[g],dirty=on&&cueDirty(g),z=document.querySelector('.'+ZK[g]);
+    $('cue-'+g).hidden=!show;z.classList.toggle('cue',!!on);
+    $('cue-'+g+'-on').hidden=on;$('cue-'+g+'-st').hidden=!on;$('cue-'+g+'-send').hidden=!on;$('cue-'+g+'-off').hidden=!on;$('cue-'+g+'-mon').hidden=!on;
     if(!on)return;
     $('cue-'+g+'-st').textContent=cueNote[g]||(dirty?'En préparation · différent du master':'En préparation · identique au master');
     $('cue-'+g+'-off').textContent=dirty?'Abandonner et quitter':'Quitter le cue';
+    ['off','mix','split'].forEach(function(v){var b=$('cue-'+g+'-m-'+v);b.setAttribute('aria-pressed',mon===v);if(v==='split')b.hidden=guest;if(v==='mix')b.textContent=guest?'Cet appareil':'Sortie master'});
+    $('cue-'+g+'-mh').textContent=mon==='off'?'Écoute coupée : tu prépares sans entendre, le niveau à droite montre que ça joue.'
+      :mon==='split'?'Split : le master sort à gauche, le cue à droite. Il faut un câble séparateur, casque sur la voie droite.'
+      :guest?'Le cue sort sur cet appareil, calé sur le master. Rien ne part vers l\'enceinte tant que tu n\'envoies pas.'
+      :'Le cue sort par la même sortie que le master, par-dessus lui. Pour l\'entendre seul au casque, passe en Split.';
   });
 }
 ['b','y','d'].forEach(function(g){
+  var bar=$('cue-'+g),row=mk('div','cuemon'),seg=mk('div','seg'),lv=mk('div','zm cuelv'),bar2=mk('i');
+  row.id='cue-'+g+'-mon';row.hidden=true;seg.setAttribute('role','group');seg.setAttribute('aria-label','Écoute du cue');
+  row.appendChild(mk('span','lbl','Écoute du cue'));
+  [['off','Coupée'],['mix','Sortie master'],['split','Split G/D']].forEach(function(o){var b=mk('button','btn',o[1]);b.type='button';b.id='cue-'+g+'-m-'+o[0];b.onclick=function(){setMon(o[0])};seg.appendChild(b)});
+  bar2.id='cue-'+g+'-lv';lv.setAttribute('aria-hidden','true');lv.appendChild(bar2);row.appendChild(seg);row.appendChild(lv);
+  var h=mk('span','hint cuemh');h.id='cue-'+g+'-mh';row.appendChild(h);bar.parentNode.insertBefore(row,bar.nextSibling); /* hors de la barre collante, pour ne pas manger l'écran */
   $('cue-'+g+'-on').onclick=function(){cueOn(g)};$('cue-'+g+'-send').onclick=function(){cueSend(g)};$('cue-'+g+'-off').onclick=function(){cueOff(g)};
 });
 /* côté hôte : les cues reçus pendant la lecture attendent le début de la mesure suivante */
 function netQueued(){
   if(!qst.length)return;var q=qst;qst=[];
-  q.forEach(function(x){try{netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
+  q.forEach(function(x){try{if(x.local){cueTake(x.local,x.m);return}netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
 }
 
 /* ----- profils : un master, des invités -----
@@ -2375,7 +2539,8 @@ function nver(){
 /* Une mise à jour interromprait-elle quelque chose ? Si oui, on la propose au lieu de la lancer. */
 function updBusy(){
   if(NET.role==='host')return playing||conns.length>0;
-  if(NET.role==='guest')return ['b','y','d'].some(function(g){return CUE[g]&&cueDirty(g)});
+  if(['b','y','d'].some(function(g){return CUE[g]&&cueDirty(g)}))return true;
+  if(NET.role==='guest')return false;
   return playing;
 }
 /* Une appli remise au premier plan n'est pas rechargée par le téléphone : on vérifie donc aussi à ce moment-là. */
