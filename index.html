@@ -209,6 +209,35 @@ html.fsl,html.fsl body{overflow:hidden}
 .nlink{font-family:var(--f-mono);font-size:12px;color:var(--ink-soft);overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}
 #n-code{font-family:var(--f-mono);font-size:18px;letter-spacing:.15em;text-transform:uppercase;width:7.5em}
 #n-msg:empty{display:none}
+/* profils : accès accordés par le master */
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.lockbar{display:none;flex-wrap:wrap;align-items:center;gap:8px}
+.lockbar .lbl{flex:1 1 150px;min-width:0}
+.zone.lock:not(.shut)>.lockbar{display:flex}
+.zone.lock>*:not(h2):not(.lockbar){display:none}
+.zone.lock .zt span::after{content:" · 🔒"}
+.zone.lock .zv input{visibility:hidden}
+.kw.klock{opacity:.35;pointer-events:none}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.btn.pchip{--zc:var(--ink);--zon:var(--panel);padding:6px 9px;font-size:12px}
+.pchip[data-g="b"]{--zc:var(--c-b);--zon:var(--on-c)}
+.pchip[data-g="y"]{--zc:var(--c-y);--zon:var(--on-c)}
+.pchip[data-g="l"]{--zc:var(--c-l);--zon:var(--on-c)}
+.pchip[data-g="c"]{--zc:var(--c-c);--zon:var(--on-c)}
+.btn.pchip[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
+.btn.pchip[aria-pressed="false"]{opacity:.75}
+#n-guests{display:flex;flex-direction:column}
+#n-guests[hidden]{display:none}
+.grow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.gname{flex:1 1 100%;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grow .pchips{flex:1 1 220px}
+#n-name{width:9em}
+#bpm-pm{display:flex;gap:4px}
+#bpm-pm[hidden]{display:none}
+#reqs{position:fixed;left:0;right:0;bottom:0;z-index:70;display:flex;flex-direction:column;gap:8px;max-height:75vh;overflow:auto;padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));pointer-events:none}
+#reqs:empty{display:none}
+.req{pointer-events:auto;align-self:center;width:min(100%,520px);display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--panel);color:var(--ink);border:2px solid var(--c-m);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.req b{font-size:15px;overflow-wrap:anywhere}
 /* zones colorées : basse rouge, synthé bleu, looper vert, rythmes neutre */
 .zone{display:flex;flex-direction:column;gap:14px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:14px;--zbg:var(--panel);background:var(--zbg);--zc:var(--ink);--zon:var(--panel);--zhi:var(--knob-mark)}
 .zb{--zc:var(--c-b);--zon:var(--on-c);--zhi:var(--c-b-hi)}
@@ -252,6 +281,7 @@ html.fsl,html.fsl body{overflow:hidden}
   <div class="tbar" id="tbar">
       <div class="bpm" aria-live="off"><span id="bpmv">130</span><small>BPM</small></div>
       <button class="btn run" id="play" aria-pressed="false">▶ Lecture</button>
+      <span id="bpm-pm" hidden><button class="btn" id="bpm-dn" aria-label="Tempo moins 1">−</button><button class="btn" id="bpm-up" aria-label="Tempo plus 1">+</button></span>
       <button class="btn" id="rew" title="Revenir au premier pas">⏮ Début</button>
       <button class="btn primary" id="upd-top" hidden>Mettre à jour</button>
       <span id="astate" class="lbl" role="status" data-ok>Audio en attente</span>
@@ -283,6 +313,13 @@ html.fsl,html.fsl body{overflow:hidden}
           </div>
         </div>
       </div>
+      <div class="edrow" id="n-me" hidden>
+        <label class="lbl" for="n-name">Ton nom</label>
+        <input class="sel" id="n-name" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Invité">
+        <span class="lbl" id="n-acc" role="status"></span>
+        <button class="btn primary" id="n-ask" hidden>Redemander l'accès</button>
+      </div>
+      <div id="n-guests" hidden></div>
       <p class="hint" id="n-help"></p>
     </div>
     <p class="lbl" id="n-msg" role="status"></p>
@@ -636,6 +673,7 @@ html.fsl,html.fsl body{overflow:hidden}
     </div>
   </section>
 </main>
+<div id="reqs" aria-live="polite"></div>
 
 <script>
 (function(){
@@ -709,6 +747,10 @@ var KN=[
  {id:'crev',label:'Reverb',def:.3,box:'cknobs',fmt:pct},
  {id:'cvol',label:'Volume',def:.75,box:'cknobs',fmt:pct}
 ];
+/* Groupes d'accès (profils master / invités) : b basse, y synthé, l looper, c congas, d rythmes, t lecture et tempo. */
+var PGN={b:'Basse',y:'Synthé',l:'Looper',c:'Congas',d:'Rythmes',t:'Lecture & tempo'},PGS='bylcdt',SECG={pat:'b',B:'b',Y:'y',D:'d',L:'l'},PG={};
+KN.forEach(function(k){var bx=k.box||'knobs';PG[k.id]=k.id==='tempo'?'t':bx==='knobs'?'b':bx==='yknobs'?'y':bx==='lknobs'?'l':bx==='cknobs'?'c':'d'});
+function can(g){return NET.role!=='guest'||NET.pm==null||NET.pm.indexOf(g)>=0} /* le master et le mode solo peuvent tout */
 var YINT=[-12,-7,-5,0,5,7,12];
 function ylfoHz(v){return .1*Math.pow(200,v)}
 function ycutHz(v){return 80*Math.pow(2,v*7)}
@@ -719,7 +761,7 @@ var Y={len:32,sel:0,wave:'sawtooth',mute:false,pat:[]};
 function lrate(v){return Math.pow(2,(v-.5)*2)}
 var L={bars:2,sel:0,slots:[0,1,2].map(function(){return {vol:.8,start:0,rate:.5,mute:false,rev:false}})};
 var B={ftype:'lowpass',lfoT:'cut',preset:''};
-var NET={role:'solo',applying:false,up:false,n:0}; /* solo, host (produit le son) ou guest (télécommande) */
+var NET={role:'solo',applying:false,up:false,n:0,pm:null,wait:false,denied:false}; /* solo, host (produit le son) ou guest (télécommande) */
 var CUE={b:false,y:false,d:false}; /* chez un invité : instruments en préparation privée */
 var BKEYS=['cutoff','res','env','decay','accent','att','adec','rel','drive','bsub','blfor','blfod','bdly','brev'];
 var DN=['BD','SD','LT','HT','RS','CP','CH','OH'];
@@ -912,7 +954,7 @@ KN.forEach(function(k){
     if(e.key==='ArrowUp'||e.key==='ArrowRight'){setKnob(k.id,P[k.id]+d);e.preventDefault()}
     else if(e.key==='ArrowDown'||e.key==='ArrowLeft'){setKnob(k.id,P[k.id]-d);e.preventDefault()}});
 });
-function setKnob(id,v){P[id]=Math.max(0,Math.min(1,v));if(/^k(punch|drive|click|duck)$/.test(id)&&D.kick){D.kick='';renderDrums()}if(B.preset&&BKEYS.indexOf(id)>=0){B.preset='';renderB()}if(id.charAt(0)==='y'&&id!=='yvol'&&Y.preset){Y.preset='';renderY()}if(id==='lvol'||id==='lstart'||id==='lrate'){L.slots[L.sel][id.slice(1)]=P[id];if(id==='lstart')drawLoop()}if(id==='dtune')D.tu[D.sel]=P[id];if(id==='ddec')D.de[D.sel]=P[id];drawKnob(id);applyParams();save()}
+function setKnob(id,v){if(!can(PG[id]))return;P[id]=Math.max(0,Math.min(1,v));if(/^k(punch|drive|click|duck)$/.test(id)&&D.kick){D.kick='';renderDrums()}if(B.preset&&BKEYS.indexOf(id)>=0){B.preset='';renderB()}if(id.charAt(0)==='y'&&id!=='yvol'&&Y.preset){Y.preset='';renderY()}if(id==='lvol'||id==='lstart'||id==='lrate'){L.slots[L.sel][id.slice(1)]=P[id];if(id==='lstart')drawLoop()}if(id==='dtune')D.tu[D.sel]=P[id];if(id==='ddec')D.de[D.sel]=P[id];drawKnob(id);applyParams();save()}
 var ZV={vol:'b',yvol:'y',lmast:'l',dvol:'d',cvol:'c'};
 function drawKnob(id){if(ZV[id])$('zv-'+ZV[id]).value=Math.round(P[id]*100);var o=knobEls[id],v=P[id];o.kn.style.setProperty('--a',(-135+v*270)+'deg');
   var txt=o.cfg.fmt(v);o.v.textContent=txt;o.kn.setAttribute('aria-valuenow',Math.round(v*100));o.kn.setAttribute('aria-valuetext',txt);
@@ -1420,7 +1462,7 @@ function renderYOpt(){
 }
 
 /* ---------- looper voix ---------- */
-var linfo=[null,null,null]; /* chez un invité : nom et durée des boucles chargées sur l'hôte */
+var linfo=[null,null,null]; /* chez un invité : nom et durée des boucles chargées sur le master */
 function lhas(k){return !!(lbuf[k]||linfo[k])}
 function ldur(k){return lbuf[k]?lbuf[k].duration:(linfo[k]?linfo[k].dur:0)}
 var lbus,lsd,lsr,lg=[],lbuf=[null,null,null],lrb=[null,null,null],lpk=[null,null,null],lname=['','',''],lact=[],lt0=[0,0,0],lrecorder=null;
@@ -1452,7 +1494,7 @@ function ldecode(ab,name,k,from){
   initAudio();if(!ctx){lmsg('Audio non pris en charge');return}
   lmsg('Décodage…');
   new Promise(function(res,rej){var p=ctx.decodeAudioData(ab,res,rej);if(p&&p.catch)p.catch(rej)})
-    .then(function(buf){lset(k,buf,name)},function(){var m='Format audio non reconnu par '+(from?'l\'appareil hôte':'ce navigateur');lmsg(m);if(from)netTo(from,{t:'ms',w:'l',m:m})});
+    .then(function(buf){lset(k,buf,name)},function(){var m='Format audio non reconnu par '+(from?'le master':'ce navigateur');lmsg(m);if(from)netTo(from,{t:'ms',w:'l',m:m})});
 }
 ['l-in','l-in2'].forEach(function(id){$(id).addEventListener('change',function(){
   var f=this.files&&this.files[0];this.value='';if(!f)return;
@@ -1744,7 +1786,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=22; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=23; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -1808,7 +1850,7 @@ function netApply(m){
 function netSend(m,except){
   if(m.t!=='st'&&syncT)netFlush(); /* garde l'ordre : les réglages partent avant le geste qui en dépend */
   if(NET.role==='host'){for(var i=0;i<conns.length;i++){var c=conns[i];if(c!==except&&c.open&&c._ok)try{c.send(m)}catch(e){}}}
-  else if(NET.role==='guest'&&hconn&&hconn.open)try{hconn.send(m)}catch(e){}
+  else if(NET.role==='guest'&&hconn&&hconn.open){var g=mgrp(m);if(g&&!can(g))return;try{hconn.send(m)}catch(e){}}
 }
 function netTo(c,m){if(c&&c.open)try{c.send(m)}catch(e){}}
 function netPlay(){if(NET.role==='host')netSend({t:'pl',on:playing?1:0})}
@@ -1829,15 +1871,30 @@ function setPlaying(on){
 function hostRx(c,m){
   if(!m||typeof m!=='object')return;c._rx=Date.now();
   if(!c._ok&&m.t!=='hi')return;
-  var k=m.k|0,i=m.i==='y'?'y':'b';
+  if(c._ok&&(c._gone||(c._wait&&m.t!=='nm'&&m.t!=='st')))return; /* tant que le master n'a pas répondu, l'invité ne peut que changer son nom (un réglage envoyé quand même est refusé plus bas, et corrigé chez lui) */
+  var k=m.k|0,i=m.i==='y'?'y':'b',mg=mgrp(m),x;
+  if(mg&&!pcan(c,mg))return; /* geste sur un instrument non accordé : ignoré */
   switch(m.t){
     case 'hi':
       netFlush();c._ok=true;if((m.b|0)>BUILD){NET.upd=m.b|0;nver()} /* un invité a une version plus récente : elle existe donc */
-      var s={},p={},x;for(x in SEC)s[x]=SEC[x].get();for(x in P)if(!PLOC[x])p[x]=P[x];
-      netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD});
-      if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle de l\'appareil hôte : recharge-la pour avoir toutes les fonctions.'});
+      var gid=String(m.id||c._id).slice(0,40),a=ACC[gid],nm=gname(m.n);c._gid=gid;
+      if(a&&a.ok){if(nm)a.n=nm;c._pm=a.p;c._wait=false} /* déjà accepté dans cette session : il retrouve ses accès */
+      else{a=ACC[gid]={n:nm||'Invité '+(GN[gid]||(GN[gid]=++gseq)),p:'',ok:false};c._pm='';c._wait=true}
+      c._n=a.n;accSave();
+      var s={},p={};for(x in SEC)s[x]=SEC[x].get();for(x in P)if(!PLOC[x])p[x]=P[x];
+      netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD,pm:c._pm,w:c._wait?1:0,nm:c._n});
+      if(c._wait)reqAdd(c,'');
+      if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle du master : recharge-la pour avoir toutes les fonctions.'});
       [0,1,2].forEach(function(q){if(lbuf[q])netLoop(q,c)});npeers();break;
+    case 'nm':var nn=gname(m.n);if(nn){c._n=nn;if(ACC[c._gid])ACC[c._gid].n=nn;accSave();reqUI();nui()}break;
+    case 'rq':var rg=pclean(m.g).split('').filter(function(g){return c._pm.indexOf(g)<0}).join('');if(rg)reqAdd(c,rg);break;
     case 'st':
+      /* on retire ce qui touche un instrument non accordé, et on renvoie à l'invité la vraie valeur pour qu'il reste calé */
+      var bad=null;
+      if(m.s)for(x in m.s)if(!pcan(c,SECG[x])){if(SEC[x]){bad=bad||{t:'st',s:{},p:{}};bad.s[x]=SEC[x].get()}delete m.s[x]}
+      if(m.p)for(x in m.p)if(!pcan(c,PG[x])){if(knobEls[x]&&!PLOC[x]){bad=bad||{t:'st',s:{},p:{}};bad.p[x]=P[x]}delete m.p[x]}
+      if(bad)netTo(c,bad);
+      if(m.g&&!pcan(c,m.g))break;
       if(m.q&&playing){qst.push({c:c,m:m});break} /* envoi d'un cue pendant la lecture : il entrera à la prochaine mesure */
       netApply(m);netSend(m,c);if(m.g)netTo(c,{t:'cq',g:m.g});break;
     case 'cmd':
@@ -1868,6 +1925,7 @@ function hostFile(c,m){
 function dropConn(c){
   var i=conns.indexOf(c);if(i<0)return;conns.splice(i,1);
   liveOff('b',c._id);liveOff('y',c._id);for(var id in nfiles)if(nfiles[id].c===c)delete nfiles[id];
+  REQ=REQ.filter(function(r){return r.c!==c});reqUI();
   npeers();
 }
 function npeers(){if(NET.role==='host'){netSend({t:'n',n:conns.length+1});nui();nver()}}
@@ -1880,7 +1938,7 @@ function mkPeer(id){
   return peer;
 }
 function hostStart(code){
-  NET.role='host';ncode=code||newCode();conns=[];Z.m=true;renderZ();nui();nmsg('Création de la session…');
+  NET.role='host';ncode=code||newCode();conns=[];REQ=[];accLoad();Z.m=true;renderZ();nui();nmsg('Création de la session…');
   var p=mkPeer(PID+ncode);if(!p){NET.role='solo';nui();return}
   p.on('open',function(){
     NET.up=true;hostTries=0;snap();
@@ -1910,10 +1968,15 @@ function guestRx(m){
   switch(m.t){
     case 'full':
       netApply({s:m.s,p:m.p});snap();setPlaying(!!m.pl);fillArmed=!!m.f;$('fill').setAttribute('aria-pressed',fillArmed);
-      var hb=m.b|0,old=hb<BUILD;NET.refused=false;
+      var hb=m.b|0,old=hb<BUILD,first=!NET.joined;NET.refused=false;
+      if(typeof m.pm==='string'){NET.pm=pclean(m.pm);NET.wait=!!m.w}else{NET.pm=null;NET.wait=false} /* un master d'avant les profils ne limite rien */
+      if(m.nm)$('n-name').placeholder=String(m.nm).slice(0,16);
       if(hb>BUILD&&!updTried(hb)){updGo(hb);break} /* l'hôte est plus récent : on se met à jour, puis on rejoint tout seul */
-      nmsg(old?'L\'appareil hôte utilise une version plus ancienne'+(hb?' ('+hb+')':'')+' : certaines fonctions peuvent manquer. Pour la mettre à jour, ferme puis rouvre l\'appli sur l\'hôte.':'');
-      if(!NET.joined){NET.joined=true;if(!old){Z.m=false;renderZ()}}nui();break;
+      nmsg(old?'Le master utilise une version plus ancienne'+(hb?' ('+hb+')':'')+' : certaines fonctions peuvent manquer. Pour la mettre à jour, ferme puis rouvre l\'appli sur le master.':'');
+      NET.joined=true;
+      if(NET.wait){Z.m=true;nmsg('Demande envoyée au master : c\'est lui qui choisit les instruments que tu peux toucher.')}
+      else if(first&&!old){Z.m=false;if(NET.pm!=null)['b','y','l','c','d'].forEach(function(g){if(can(g))Z[g]=true})}
+      renderZ();nui();break;
     case 'st':netApply(m);break;
     case 'pl':setPlaying(!!m.on);break;
     case 'fl':fillArmed=!!m.on;$('fill').setAttribute('aria-pressed',fillArmed);break;
@@ -1929,17 +1992,21 @@ function guestRx(m){
     case 'lv':if(Array.isArray(m.v))['b','y','l','d','c'].forEach(function(z,i){$('zm-'+z).style.transform='scaleX('+num(m.v[i],0)+')'});break;
     case 'n':NET.n=m.n|0;nui();break;
     case 'up':if((m.b|0)>BUILD)updGo(m.b|0);break;
+    case 'pm':permGot(pclean(m.p),pclean(m.d));break;
+    case 'no':
+      NET.denied=true;NET.wait=false;NET.pm='';var hc=hconn;hconn=null;try{if(hc)hc.close()}catch(e){}
+      Z.m=true;renderZ();nui();nmsg(m.k?'Le master t\'a retiré de la session.':'Le master a refusé ta demande.');break;
     case 'cq':if(CUE[m.g]!==undefined){cueNote[m.g]='En place sur le master';cueUI();cueClear(m.g,3500)}break;
     case 'ms':
       if(m.w==='l')lmsg(String(m.m||''));
-      else if(/Versions différentes/.test(String(m.m))){NET.refused=true;nui();nmsg('L\'appareil hôte utilise une ancienne version de l\'appli et refuse la connexion. Sur l\'hôte : ferme complètement l\'appli, rouvre-la, puis recrée la session.')}
+      else if(/Versions différentes/.test(String(m.m))){NET.refused=true;nui();nmsg('Le master utilise une ancienne version de l\'appli et refuse la connexion. Sur le master : ferme complètement l\'appli, rouvre-la, puis recrée la session.')}
       else nmsg(String(m.m||''));break;
   }
 }
 /* Envoi d'un son du looper vers l'hôte, par morceaux, sans saturer la liaison. */
 function netFile(ab,name,k){
   var u8=new Uint8Array(ab),CH=9000,n=Math.ceil(u8.length/CH),id=Math.random().toString(36).slice(2,10),i=0;
-  if(!hconn||!hconn.open){lmsg('Pas de liaison avec l\'appareil hôte');return}
+  if(!hconn||!hconn.open){lmsg('Pas de liaison avec le master');return}
   if(u8.length>6e6){lmsg('Son trop lourd pour l\'envoi (6 Mo max) : charge-le depuis l\'appareil relié à l\'enceinte');return}
   (function pump(){
     if(!hconn||!hconn.open){lmsg('Envoi interrompu');return}
@@ -1947,7 +2014,7 @@ function netFile(ab,name,k){
     while(i<n&&sent<6&&(!dc||dc.bufferedAmount<300000)){
       netSend({t:'lf',id:id,k:k,i:i,n:n,name:name,d:btoa(String.fromCharCode.apply(null,u8.subarray(i*CH,(i+1)*CH)))});i++;sent++;
     }
-    lmsg(i<n?'Envoi vers l\'enceinte… '+Math.round(i/n*100)+' %':'Envoyé, décodage sur l\'appareil hôte…');
+    lmsg(i<n?'Envoi vers l\'enceinte… '+Math.round(i/n*100)+' %':'Envoyé, décodage sur le master…');
     if(i<n)setTimeout(pump,15);
   })();
 }
@@ -1955,19 +2022,19 @@ function guestStart(code){
   if(playing)stop();
   if(ctx){try{ctx.suspend()}catch(e){}}try{if(silent)silent.pause()}catch(e){}
   zan=null;['b','y','l','d','c'].forEach(function(z){$('zm-'+z).style.transform='scaleX(0)'});
-  NET.role='guest';NET.joined=false;NET.refused=false;ncode=code;document.body.classList.add('guest');Z.m=true;renderZ();
-  audioMsg('Télécommande : le son sort sur l\'appareil hôte');
+  NET.role='guest';NET.joined=false;NET.refused=false;NET.denied=false;NET.wait=false;NET.pm='';ncode=code;document.body.classList.add('guest');Z.m=true;renderZ();
+  audioMsg('Télécommande : le son sort sur le master');
   nui();nmsg('Connexion à la session '+code+'…');gconnect();
 }
 function gconnect(){
-  if(NET.role!=='guest')return;
+  if(NET.role!=='guest'||NET.denied)return;
   if(!peer||peer.destroyed){
     var p=mkPeer(null);if(!p)return;
     p.on('open',function(){NET.up=true;gdial()});
     p.on('disconnected',function(){NET.up=false;gretry()});
     p.on('error',function(e){
       if(peer!==p)return;
-      if(e.type==='peer-unavailable')nmsg('Session '+ncode+' introuvable : vérifie le code, et que l\'appareil hôte a l\'appli ouverte. Nouvel essai automatique.');
+      if(e.type==='peer-unavailable')nmsg('Session '+ncode+' introuvable : vérifie le code, et que le master a l\'appli ouverte. Nouvel essai automatique.');
       else if(e.type==='browser-incompatible'){nmsg('Ce navigateur ne permet pas la liaison entre appareils.');return}
       else nmsg('Liaison impossible pour le moment : vérifie le réseau. Nouvel essai automatique.');
       gretry();
@@ -1980,9 +2047,9 @@ function gdial(){
   if(hconn){var old=hconn;hconn=null;try{old.close()}catch(e){}}
   dialAt=Date.now();
   var c=hconn=peer.connect(PID+ncode,{reliable:true,serialization:'json'});
-  c.on('open',function(){if(c!==hconn)return;lastRx=Date.now();netTo(c,{t:'hi',v:PROTO,b:BUILD});nui()});
+  c.on('open',function(){if(c!==hconn)return;lastRx=Date.now();netTo(c,{t:'hi',v:PROTO,b:BUILD,id:myId(),n:myName()});nui()});
   c.on('data',function(m){if(c===hconn)try{guestRx(m)}catch(e){}});
-  c.on('close',function(){if(c!==hconn)return;hconn=null;nui();nmsg('Liaison perdue avec l\'appareil hôte. Nouvel essai automatique.');gretry()});
+  c.on('close',function(){if(c!==hconn)return;hconn=null;nui();nmsg('Liaison perdue avec le master. Nouvel essai automatique.');gretry()});
   c.on('error',function(){});
 }
 function gretry(){if(NET.role!=='guest'||gT)return;gT=setTimeout(function(){gT=0;if(NET.role==='guest'&&!(hconn&&hconn.open))gconnect()},3000)}
@@ -1999,14 +2066,14 @@ function cueDirty(g){var d=false,M=cueM[g];if(!M)return false;
   cueEach(g,function(k){if(JSON.stringify(SEC[k].get())!==M.s[k])d=true},function(k){if(Math.abs(P[k]-M.p[k])>2e-4)d=true});return d}
 function cueClear(g,ms){clearTimeout(cueT[g]);cueT[g]=setTimeout(function(){cueNote[g]='';cueUI()},ms)}
 function cueOn(g){
-  if(NET.role!=='guest'||CUE[g])return;
+  if(NET.role!=='guest'||CUE[g]||!can(g))return;
   netFlush(); /* ce qui était en attente part d'abord : le cue démarre d'un état identique au master */
   var M=cueM[g]={s:{},p:{}};cueEach(g,function(k){M.s[k]=JSON.stringify(SEC[k].get())},function(k){M.p[k]=Math.round(P[k]*1e4)/1e4});
   CUE[g]=true;cueNote[g]='';cueUI();
 }
 function cueSend(g){
   if(!cueHold(g))return;
-  if(!(hconn&&hconn.open)){cueNote[g]='Pas de liaison avec l\'hôte';cueUI();return}
+  if(!(hconn&&hconn.open)){cueNote[g]='Pas de liaison avec le master';cueUI();return}
   var M=cueM[g],m={t:'st',s:{},p:{},q:1,g:g};
   cueEach(g,function(k){var j=JSON.stringify(SEC[k].get());m.s[k]=JSON.parse(j);lastS[k]=j;M.s[k]=j},
     function(k){var v=Math.round(P[k]*1e4)/1e4;m.p[k]=v;lastP[k]=P[k];M.p[k]=v});
@@ -2038,6 +2105,131 @@ function netQueued(){
   q.forEach(function(x){try{netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
 }
 
+/* ----- profils : un master, des invités -----
+   Le master (l'appareil qui produit le son) peut tout. Un invité qui arrive ne peut rien toucher tant que le master n'a pas
+   répondu à sa demande en choisissant ses instruments ; le master peut ensuite changer ces accès à tout moment.
+   Le contrôle est fait deux fois : l'écran de l'invité verrouille ce qui n'est pas accordé, et le master ignore
+   de toute façon ce qui arrive pour un instrument non accordé. */
+var ACC={},REQ=[],GN={},gseq=0,lockNote={},askT={},memId='';
+function pclean(p){p=String(p==null?'':p);var r='';for(var i=0;i<PGS.length;i++)if(p.indexOf(PGS.charAt(i))>=0)r+=PGS.charAt(i);return r}
+function pnames(p){return p?p.split('').map(function(g){return PGN[g]}).join(' · '):'aucun instrument'}
+function gname(v){return String(v==null?'':v).replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,16)}
+function mgrp(m){switch(m.t){case 'cmd':return m.c==='fill'?'d':'t';case 'nt':case 'au':return m.i==='y'?'y':'b';case 'tp':return 'd';case 'lp':case 'lc':case 'lf':return 'l';case 'cg':return 'c'}return ''}
+function pcan(c,g){return !!g&&!c._wait&&!c._gone&&String(c._pm||'').indexOf(g)>=0}
+function mk(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+/* -- côté master -- */
+function accSave(){try{sessionStorage.setItem('lst-acc',JSON.stringify({a:ACC,n:gseq}))}catch(e){}}
+function accLoad(){ACC={};gseq=0;try{var j=JSON.parse(sessionStorage.getItem('lst-acc')||'null');if(j&&j.a&&typeof j.a==='object'){for(var k in j.a){var a=j.a[k];if(a&&a.ok)ACC[k]={n:gname(a.n)||'Invité',p:pclean(a.p),ok:true}}gseq=j.n|0}}catch(e){}}
+function reqDefault(c){var taken='',r='';conns.forEach(function(o){if(o!==c&&o._ok&&!o._wait&&!o._gone)taken+=o._pm});'bylcd'.split('').forEach(function(g){if(taken.indexOf(g)<0)r+=g});return r}
+function reqAdd(c,want){
+  var r=null;REQ.forEach(function(x){if(x.c===c)r=x});
+  if(!r){r={c:c,want:'',sel:c._wait?reqDefault(c):c._pm};REQ.push(r)}
+  if(want){r.want=pclean(r.want+want);r.sel=pclean(r.sel+want)}
+  reqUI();nui();
+}
+function reqDone(r,ok){
+  var i=REQ.indexOf(r),c=r.c;if(i<0)return;REQ.splice(i,1);
+  if(c._wait){if(ok)permGive(c,r.sel);else kick(c,false)}
+  else if(ok)permGive(c,r.sel);else netTo(c,{t:'pm',p:c._pm,d:r.want});
+  reqUI();nui();
+}
+function permGive(c,p){
+  p=pclean(p);var a=ACC[c._gid]||(ACC[c._gid]={n:c._n});a.p=p;a.ok=true;accSave();
+  conns.forEach(function(o){
+    if(o._gid!==c._gid||o._gone)return;o._pm=p;o._wait=false;
+    if(p.indexOf('b')<0)liveOff('b',o._id);if(p.indexOf('y')<0)liveOff('y',o._id);
+    if(p.indexOf('l')<0)for(var id in nfiles)if(nfiles[id].c===o)delete nfiles[id];
+    qst=qst.filter(function(x){return x.c!==o||p.indexOf(x.m.g)>=0});
+    netTo(o,{t:'pm',p:p});
+  });
+  REQ.forEach(function(r){if(r.c._gid===c._gid){r.want=r.want.split('').filter(function(g){return p.indexOf(g)<0}).join('')}});
+  REQ=REQ.filter(function(r){return r.c._wait||r.want});
+  reqUI();nui();
+}
+function kick(c,byMaster){
+  delete ACC[c._gid];accSave();
+  conns.slice().forEach(function(o){
+    if(o._gid!==c._gid)return;o._gone=true;o._pm='';liveOff('b',o._id);liveOff('y',o._id);
+    netTo(o,{t:'no',k:byMaster?1:0});setTimeout(function(){try{o.close()}catch(e){}dropConn(o)},500);
+  });
+  REQ=REQ.filter(function(r){return r.c._gid!==c._gid});reqUI();nui();
+}
+function chipRow(sel,cb){
+  var d=mk('div','pchips');d.setAttribute('role','group');d.setAttribute('aria-label','Accès');
+  PGS.split('').forEach(function(g){
+    var b=mk('button','btn pchip',PGN[g]);b.type='button';b.setAttribute('data-g',g);b.setAttribute('aria-pressed',sel.indexOf(g)>=0?'true':'false');
+    b.onclick=function(){var on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on?'true':'false');cb(g,on)};d.appendChild(b)});
+  return d;
+}
+function reqUI(){
+  var box=$('reqs');box.textContent='';if(NET.role!=='host')return;
+  REQ.forEach(function(r){
+    var join=!!r.c._wait,d=mk('div','req');d.setAttribute('role','group');
+    d.appendChild(mk('b','',join?r.c._n+' veut rejoindre la session':r.c._n+' demande : '+pnames(r.want)));
+    d.appendChild(mk('span','lbl',join?'Choisis ce qu\'il peut toucher':'Ses accès si tu valides'));
+    d.appendChild(chipRow(r.sel,function(g,on){r.sel=on?pclean(r.sel+g):r.sel.replace(g,'')}));
+    var a=mk('div','actions'),ok=mk('button','btn primary ok',join?'Accepter':'Valider'),no=mk('button','btn no','Refuser');
+    ok.type=no.type='button';ok.onclick=function(){reqDone(r,true)};no.onclick=function(){reqDone(r,false)};
+    a.appendChild(ok);a.appendChild(no);d.appendChild(a);box.appendChild(d);
+  });
+}
+function guests(){var seen={},l=[];conns.forEach(function(c){if(!c._ok||c._wait||c._gone||seen[c._gid])return;seen[c._gid]=1;l.push(c)});return l}
+function guestsUI(){
+  var box=$('n-guests'),host=NET.role==='host';box.hidden=!host;if(!host)return;box.textContent='';
+  var l=guests();box.appendChild(mk('div','lbl',l.length?'Invités et accès (touche un instrument pour l\'ouvrir ou le fermer)':'Aucun invité accepté pour le moment'));
+  l.forEach(function(c){
+    var row=mk('div','grow'),out=mk('button','btn gout','Retirer');out.type='button';out.onclick=function(){kick(c,true)};
+    row.appendChild(mk('div','gname',c._n));
+    row.appendChild(chipRow(c._pm,function(g,on){permGive(c,on?c._pm+g:c._pm.replace(g,''))}));
+    row.appendChild(out);box.appendChild(row);
+  });
+}
+/* -- côté invité -- */
+function myId(){var v='';try{v=localStorage.getItem('lst-id')||''}catch(e){}
+  if(!/^[a-z0-9]{8,20}$/.test(v)){v=memId||(memId=(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)).slice(0,14));try{localStorage.setItem('lst-id',v)}catch(e){}}return v}
+function myName(){try{return gname(localStorage.getItem('lst-name'))}catch(e){return ''}}
+function permGot(p,den){
+  var was=NET.wait||NET.pm==null?'':NET.pm,waited=NET.wait,got='';
+  NET.pm=p;NET.wait=false;
+  ['b','y','l','c','d'].forEach(function(g){if(p.indexOf(g)>=0){lockNote[g]='';if(was.indexOf(g)<0){Z[g]=true;got+=g}}else if(den.indexOf(g)>=0)lockNote[g]='Le master préfère garder cet instrument pour le moment'});
+  if(waited)Z.m=false;
+  renderZ();nui();
+  nmsg(waited?'Le master t\'a accepté. Tes accès : '+pnames(p)+'.':got?'Le master t\'a ouvert : '+pnames(got)+'.':den?'':'Le master a modifié tes accès : '+pnames(p)+'.');
+}
+function permUI(){
+  var guest=NET.role==='guest',off=guest&&(NET.wait||NET.denied||!(hconn&&hconn.open));
+  ['b','y','l','c','d'].forEach(function(g){
+    var lock=!can(g);
+    if(lock&&CUE[g])cueOff(g);
+    if(lock&&g==='c'&&CFS)cfsSet(false);
+    document.querySelector('.'+ZK[g]).classList.toggle('lock',lock);$('zv-'+g).disabled=lock;
+    $('lk-'+g+'-ask').hidden=off;
+    $('lk-'+g+'-t').textContent=NET.denied?'Tu n\'es plus dans la session':!(hconn&&hconn.open)?'Connexion au master…':NET.wait?'En attente de la réponse du master':(lockNote[g]||'Le master ne t\'a pas ouvert cet instrument');
+  });
+  var t=!can('t');$('play').disabled=t;$('rew').disabled=t;$('fill').disabled=!can('d');
+  knobEls.tempo.kn.parentNode.classList.toggle('klock',t);knobEls.tempo.kn.tabIndex=t?-1:0;
+  $('bpm-pm').hidden=!(guest&&!t&&!can('b')); /* la basse est verrouillée : le potard de tempo est caché, on en donne un autre */
+}
+['b','y','l','c','d'].forEach(function(g){
+  var bar=mk('div','lockbar'),t=mk('span','lbl'),b=mk('button','btn','Demander l\'accès');
+  t.id='lk-'+g+'-t';t.setAttribute('role','status');b.id='lk-'+g+'-ask';b.type='button';bar.appendChild(t);bar.appendChild(b);
+  var z=document.querySelector('.'+ZK[g]);z.insertBefore(bar,z.querySelector('h2').nextSibling);
+  b.onclick=function(){
+    if(askT[g]||!(hconn&&hconn.open))return;
+    try{hconn.send({t:'rq',g:g})}catch(e){}
+    lockNote[g]='Demande envoyée au master';b.disabled=true;permUI();
+    askT[g]=setTimeout(function(){askT[g]=0;b.disabled=false;if(lockNote[g]==='Demande envoyée au master'){lockNote[g]='';permUI()}},15000);
+  };
+});
+(function(){
+  var inp=$('n-name'),t=0;inp.value=myName();
+  function push(){var n=gname(inp.value);try{localStorage.setItem('lst-name',n)}catch(e){}if(n&&NET.role==='guest'&&hconn&&hconn.open)try{hconn.send({t:'nm',n:n})}catch(e){}}
+  inp.addEventListener('input',function(){clearTimeout(t);t=setTimeout(push,500)});inp.addEventListener('change',function(){clearTimeout(t);push()});
+  $('n-ask').onclick=function(){NET.denied=false;nmsg('Nouvelle demande envoyée au master…');nui();gconnect()};
+  function bpm(d){setKnob('tempo',(bpmOf(P.tempo)+d-60)/140)}
+  $('bpm-dn').onclick=function(){bpm(-1)};$('bpm-up').onclick=function(){bpm(1)};
+})();
+
 /* ----- surveillance des liaisons et niveaux ----- */
 setInterval(function(){
   var now=Date.now();
@@ -2045,7 +2237,7 @@ setInterval(function(){
     conns.slice().forEach(function(c){if(now-c._rx>9000){try{c.close()}catch(e){}dropConn(c)}});
     netSend({t:'pg'});
   }else if(NET.role==='guest'){
-    if(hconn&&hconn.open){if(now-lastRx>9000){var c=hconn;hconn=null;try{c.close()}catch(e){}nui();nmsg('Liaison perdue avec l\'appareil hôte. Nouvel essai automatique.');gretry()}else netSend({t:'pg'})}
+    if(hconn&&hconn.open){if(now-lastRx>9000){var c=hconn;hconn=null;try{c.close()}catch(e){}nui();nmsg('Liaison perdue avec le master. Nouvel essai automatique.');gretry()}else netSend({t:'pg'})}
     else if(now-dialAt>12000)gconnect();
   }
 },2000);
@@ -2064,9 +2256,11 @@ document.addEventListener('visibilitychange',function(){
 /* ----- interface de session ----- */
 function nui(){
   cueUI();
-  var on=NET.role!=='solo',host=NET.role==='host',linked=host?!!NET.up:!!(hconn&&hconn.open),n=conns.length;
+  var on=NET.role!=='solo',host=NET.role==='host',linked=host?!!NET.up:!!(hconn&&hconn.open),n=host?guests().length:0,nq=REQ.length;
+  permUI();guestsUI();$('n-me').hidden=host;$('n-ask').hidden=!NET.denied;
+  $('n-acc').textContent=host||NET.denied?'':NET.wait?'En attente du master':NET.pm==null?'':'Tes accès : '+pnames(NET.pm);
   $('n-solo').hidden=on;$('n-on').hidden=!on;
-  $('n-stat').textContent=!on?'Solo':host?(linked?'Hôte · '+n+' invité'+(n>1?'s':''):'Hôte · connexion…'):(linked?(NET.refused?'Invité · hôte à mettre à jour':'Invité · connecté'+(NET.n>2?' · '+NET.n+' appareils':'')):'Invité · connexion…');
+  $('n-stat').textContent=!on?'Solo':host?(linked?'Master · '+n+' invité'+(n>1?'s':'')+(nq?' · '+nq+' demande'+(nq>1?'s':''):''):'Master · connexion…'):NET.denied?'Invité · non admis':(linked?(NET.refused?'Invité · master à mettre à jour':NET.wait?'Invité · en attente du master':'Invité · connecté'+(NET.n>2?' · '+NET.n+' appareils':'')):'Invité · connexion…');
   if(!on)return;
   var url=location.origin+location.pathname+'#'+ncode,q=$('n-qr');
   $('n-codev').textContent=ncode;$('n-link').textContent=url;q.hidden=!host;
@@ -2074,7 +2268,7 @@ function nui(){
     try{var g=qrcode(0,'M');g.addData(url);g.make();q.innerHTML=g.createSvgTag({cellSize:4,margin:2,scalable:true});q.setAttribute('data-u',url)}catch(e){q.hidden=true}
   }
   $('n-help').textContent=host?'Cet appareil produit le son : relie-le à l\'enceinte et garde l\'appli ouverte à l\'écran. Les autres scannent le QR code ou ouvrent le lien, sans rien installer.'
-    :'Tu pilotes l\'appareil hôte : le son sort sur son enceinte, pas sur ce téléphone. Tes réglages personnels ne sont pas modifiés.';
+    :'Tu pilotes le master : le son sort sur son enceinte, pas sur ce téléphone. C\'est le master qui choisit les instruments que tu peux toucher. Tes réglages personnels ne sont pas modifiés.';
 }
 $('n-host').onclick=function(){
   var code='';try{code=localStorage.getItem('lst-host')||''}catch(e){}
@@ -2102,7 +2296,7 @@ $('n-share').onclick=function(){
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){nmsg('Lien copié.')},fb);else fb();
 };
 $('n-leave').onclick=function(){
-  try{sessionStorage.removeItem('lst-hosting')}catch(e){}
+  try{sessionStorage.removeItem('lst-hosting');sessionStorage.removeItem('lst-acc')}catch(e){}
   try{if(peer)peer.destroy()}catch(e){}
   try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
   location.reload();
