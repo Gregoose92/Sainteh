@@ -177,6 +177,19 @@ button,select,input{font:inherit;color:inherit}
 @keyframes cgr{from{opacity:.95;transform:scale(.5)}to{opacity:0;transform:scale(3.2)}}
 @media (prefers-reduced-motion:reduce){.cgr.go{animation-duration:.12s}}
 @media (min-width:701px){.cskins{--dw:30%}}
+/* congas en plein écran : la zone recouvre tout l'écran, il ne reste que les peaux (ou les pads) et une barre minimale */
+.cfsbar{display:none}
+html.fsl,html.fsl body{overflow:hidden}
+.zc.fs{position:fixed;inset:0;z-index:60;margin:0;border:0;border-radius:0;gap:10px;overflow:hidden;touch-action:none;overscroll-behavior:none;background:var(--zbg);
+  padding:calc(10px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
+.zc.fs>h2,.zc.fs>.edrow,.zc.fs>.knobs,.zc.fs>.hint{display:none}
+.zc.fs>.cfsbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.zc.fs>.cfsbar .sp{margin-left:auto}
+.zc.fs>.cskins,.zc.fs>.cpads{flex:1 1 0;min-height:0}
+.zc.fs>.cskins{align-content:center;align-items:center;gap:8px 14px}
+.zc.fs>.cpads{grid-auto-rows:1fr}
+.zc.fs .cpad{font-size:clamp(15px,2.6vw,26px)}
+.zc.fs .cpad small{font-size:clamp(10px,1.4vw,15px)}
 /* session à plusieurs */
 .nstat{margin-left:auto;text-align:right}
 .nrow{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
@@ -520,6 +533,15 @@ button,select,input{font:inherit;color:inherit}
         <button class="btn" id="cv-pads">Pads</button>
         <button class="btn" id="cv-skin">Peaux</button>
       </div>
+      <button class="btn" id="c-fs">Plein écran</button>
+    </div>
+    <div class="cfsbar" id="cfsbar">
+      <button class="btn run" id="cfs-play" aria-pressed="false">▶ Lecture</button>
+      <div class="seg" role="group" aria-label="Affichage des congas">
+        <button class="btn" id="cfv-pads">Pads</button>
+        <button class="btn" id="cfv-skin">Peaux</button>
+      </div>
+      <button class="btn sp" id="cfs-x" aria-label="Quitter le plein écran">✕ Quitter</button>
     </div>
     <div class="cpads" id="cpads" role="group" aria-label="Congas : trois fûts, quatre frappes"></div>
     <div class="cskins" id="cskins" role="group" aria-label="Congas : trois peaux, le son dépend de l'endroit frappé" hidden></div>
@@ -836,7 +858,7 @@ function audition(st){
   bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);
   vca.gain.setTargetAtTime(0,t+.22,.01);
 }
-function setPlayUI(){var b=$('play');b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'}
+function setPlayUI(){['play','cfs-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
 
 /* ---------- potards ---------- */
 var knobEls={};
@@ -1567,11 +1589,11 @@ function congaAt(d,r,muted,vel){
 var CV='pads';try{if(localStorage.getItem('lst-cview')==='skin')CV='skin'}catch(e){}
 function renderCV(){
   var sk=CV==='skin';$('cpads').hidden=sk;$('cskins').hidden=!sk;
-  $('cv-pads').setAttribute('aria-pressed',!sk);$('cv-skin').setAttribute('aria-pressed',sk);
+  ['cv','cfv'].forEach(function(p){$(p+'-pads').setAttribute('aria-pressed',!sk);$(p+'-skin').setAttribute('aria-pressed',sk)});
   $('c-hint').textContent=sk?'Le son dépend de l\'endroit frappé : centre = basse, milieu = note ouverte, bord = slap. Pour étouffer, garde un doigt posé sur la peau et frappe avec un autre.'
     :'Instrument joué en direct, sans séquence. Chaque colonne est un fût, chaque ligne une frappe. Joue à plusieurs doigts, ou glisse d\'un pad à l\'autre pour enchaîner.';
 }
-['pads','skin'].forEach(function(v){$('cv-'+v).onclick=function(){CV=v;try{localStorage.setItem('lst-cview',v)}catch(e){}renderCV()}});
+['pads','skin'].forEach(function(v){$('cv-'+v).onclick=$('cfv-'+v).onclick=function(){CV=v;try{localStorage.setItem('lst-cview',v)}catch(e){}renderCV();cfsLayout()}});
 (function(){
   var box=$('cskins'),held={},K=[.9,1,1.1],NS='http://www.w3.org/2000/svg';
   CG.forEach(function(dr,d){
@@ -1606,6 +1628,37 @@ function renderCV(){
   box.addEventListener('contextmenu',function(e){e.preventDefault()});
 })();
 renderCV();
+/* Plein écran : la zone passe par-dessus toute la page. Quand le navigateur le permet (iPad, ordinateur),
+   on demande en plus le vrai plein écran, qui masque la barre d'adresse ; s'il est refusé, le recouvrement suffit. */
+var CFS=false,cfsLock=null,cfsY=0;
+function cfsLayout(){
+  var box=$('cskins'),ws=[].slice.call(box.querySelectorAll('.cdw'));
+  if(!CFS){ws.forEach(function(w){w.style.width=''});box.style.flexWrap='';return}
+  if(CV!=='skin')return;
+  var W=box.clientWidth,H=box.clientHeight,g=14,lab=24,K=[.9,1,1.1],row=W>=H*1.15;
+  var u=row?Math.min((W-2*g)/3,(H-lab)/1.1):Math.min((W-g)/1.9,(H-2*lab-10)/2.1); /* trois fûts en ligne, ou deux puis un */
+  u=Math.max(60,Math.floor(u));box.style.flexWrap=row?'nowrap':'wrap';
+  ws.forEach(function(w,i){w.style.width=Math.floor(u*K[i])+'px'});
+}
+function cfsSet(on){
+  var z=document.querySelector('.zc'),p;if(on&&!CFS)cfsY=window.scrollY; /* la zone sort du flux : on retiendra où en était la page */
+  CFS=!!on;
+  z.classList.toggle('fs',CFS);document.documentElement.classList.toggle('fsl',CFS);
+  if(CFS){
+    try{var rq=z.requestFullscreen||z.webkitRequestFullscreen;if(rq){p=rq.call(z);if(p&&p.catch)p.catch(function(){})}}catch(e){}
+    try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){cfsLock=l},function(){})}catch(e){}
+  }else{
+    try{if(document.fullscreenElement||document.webkitFullscreenElement){var ex=document.exitFullscreen||document.webkitExitFullscreen;p=ex.call(document);if(p&&p.catch)p.catch(function(){})}}catch(e){}
+    try{if(cfsLock){cfsLock.release();cfsLock=null}}catch(e){}
+  }
+  cfsLayout();if(!CFS)window.scrollTo(0,cfsY);try{$(CFS?'cfs-x':'c-fs').focus({preventScroll:true})}catch(e){}
+}
+$('c-fs').onclick=function(){cfsSet(true)};
+$('cfs-x').onclick=function(){cfsSet(false)};
+$('cfs-play').onclick=function(){playing?stop():start()};
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&CFS)cfsSet(false)});
+window.addEventListener('resize',function(){if(CFS)cfsLayout()});
+['fullscreenchange','webkitfullscreenchange'].forEach(function(ev){document.addEventListener(ev,function(){if(CFS)setTimeout(cfsLayout,80)})});
 (function(){
   var box=$('cpads'),held={};
   CST.forEach(function(st){CG.forEach(function(dr,d){
