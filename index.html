@@ -196,7 +196,7 @@ html.fsl,html.fsl body{overflow:hidden}
 .cuemon{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px;border:1px dashed var(--zc);border-radius:6px}
 .cuemon[hidden]{display:none}
 .cuelv{flex:1 1 60px;min-width:40px;max-width:160px}
-.cuemh{flex:1 1 100%;font-size:12px}
+#lat-b:empty,#lat-y:empty{display:none}
 .zone.cue{box-shadow:inset 0 0 0 2px var(--zc)}
 .zone.cue>.cuebar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + 40px);z-index:4;margin-inline:-6px;padding:8px;border:1px dashed var(--zc);border-radius:6px;background:color-mix(in srgb,var(--zc) 16%,var(--panel))}
 .zone.cue .zt span::after{content:" · CUE"}
@@ -439,7 +439,7 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn" id="lb-acc" aria-pressed="false">Accent</button>
       </div>
       <div class="keys live" id="lkeys-b"></div>
-      <p class="hint">Joue par-dessus la séquence : tant qu'une touche est tenue, la séquence de cet instrument se tait. Glisse d'une touche à l'autre pour lier les notes. <span id="lat-b"></span></p>
+      <p class="hint" id="lat-b" role="status"></p>
     </div>
 
   <section class="gen">
@@ -475,7 +475,6 @@ html.fsl,html.fsl body{overflow:hidden}
       <button class="btn" id="b-copy">Copier la feuille de pattern</button>
       <span id="toast" role="status"></span>
     </div>
-    <p class="hint">Espace : lecture / pause. « Début » ramène au premier pas. Le tempo et le shuffle pilotent la basse et les rythmes ensemble. Potards : glisser verticalement ou flèches du clavier, double-clic pour revenir à la valeur par défaut. Un slide sur un pas lie ce pas au suivant (glissé de hauteur, enveloppe non redéclenchée).</p>
     <textarea id="export" readonly hidden aria-label="Feuille de pattern"></textarea>
   </section>
 
@@ -564,7 +563,7 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn" id="ly-acc" aria-pressed="false">Accent</button>
       </div>
       <div class="keys live" id="lkeys-y"></div>
-      <p class="hint">Joue par-dessus la séquence : tant qu'une touche est tenue, la séquence de cet instrument se tait. Glisse d'une touche à l'autre pour lier les notes. <span id="lat-y"></span></p>
+      <p class="hint" id="lat-y" role="status"></p>
     </div>
     <div class="actions">
       <select class="sel" id="y-style" aria-label="Style de pattern du synthé">
@@ -575,7 +574,6 @@ html.fsl,html.fsl body{overflow:hidden}
       <button class="btn" id="y-r">Décaler ▶</button>
       <button class="btn" id="y-clr">Effacer</button>
     </div>
-    <p class="hint">Le générateur du synthé reprend la tonique et la gamme choisies pour la basse.</p>
   </section>
 
   <section class="zone zl">
@@ -614,7 +612,6 @@ html.fsl,html.fsl body{overflow:hidden}
       <input class="vh" type="file" id="l-in2" accept="audio/*" capture tabindex="-1" aria-hidden="true">
     </div>
     <div class="knobs" id="lknobs"></div>
-    <p class="hint">Les trois pads jouent une boucle une seule fois, tout de suite. Avec « En boucle » activé, la boucle repart aussi du début à intervalle fixe, calée sur le tempo. Le micro direct n'apparaît que si le navigateur l'autorise pour cette page ; sinon, enregistre ta voix avec le dictaphone du téléphone ou importe un fichier. Les boucles ne sont pas conservées au rechargement de la page.</p>
   </section>
 
   <section class="zone zc">
@@ -638,7 +635,6 @@ html.fsl,html.fsl body{overflow:hidden}
     <div class="cpads" id="cpads" role="group" aria-label="Congas : trois fûts, quatre frappes"></div>
     <div class="cskins" id="cskins" role="group" aria-label="Congas : trois peaux, le son dépend de l'endroit frappé" hidden></div>
     <div class="knobs" id="cknobs"></div>
-    <p class="hint" id="c-hint"></p>
   </section>
 
   <section class="zone zd">
@@ -689,7 +685,6 @@ html.fsl,html.fsl body{overflow:hidden}
       <span class="lbl" id="dlabel">Piste BD</span>
       <label class="lbl" for="d-inst">Instrument</label>
       <select class="sel" id="d-inst"></select>
-      <span class="hint">1 appui : note · 2 appuis : accent · 3 appuis : vide</span>
     </div>
     <div class="steps" id="pads"></div>
     <div class="actions">
@@ -1688,7 +1683,7 @@ document.addEventListener('pointerdown',warm,true);
 function regest(){if(!ctx||(NET.role==='guest'&&!cueAny()))return;if(ctx.state!=='running')wake();if(!silent||silent.paused)unmute()}
 ['touchend','pointerup','click','keydown'].forEach(function(ev){document.addEventListener(ev,regest,true)});
 function latency(){if(!ctx)return;var l=Math.round(((ctx.baseLatency||0)+(ctx.outputLatency||0))*1000);
-  var m=l>0?'Latence de sortie annoncée par l\'appareil : '+l+' ms.'+(l>60?' C\'est élevé : une sortie Bluetooth en est la cause la plus fréquente.':''):'';
+  var m=l>60?'Latence de sortie élevée : '+l+' ms. Une sortie Bluetooth en est la cause la plus fréquente.':'';
   ['lat-b','lat-y'].forEach(function(id){if($(id).textContent!==m)$(id).textContent=m})}
 setInterval(latency,2000);
 
@@ -1797,8 +1792,6 @@ var CV='pads';try{if(localStorage.getItem('lst-cview')==='skin')CV='skin'}catch(
 function renderCV(){
   var sk=CV==='skin';$('cpads').hidden=sk;$('cskins').hidden=!sk;
   ['cv','cfv'].forEach(function(p){$(p+'-pads').setAttribute('aria-pressed',!sk);$(p+'-skin').setAttribute('aria-pressed',sk)});
-  $('c-hint').textContent=sk?'Le son dépend de l\'endroit frappé : centre = basse, milieu = note ouverte, bord = slap. Pour étouffer, garde un doigt posé sur la peau et frappe avec un autre.'
-    :'Instrument joué en direct, sans séquence. Chaque colonne est un fût, chaque ligne une frappe. Joue à plusieurs doigts, ou glisse d\'un pad à l\'autre pour enchaîner.';
 }
 ['pads','skin'].forEach(function(v){$('cv-'+v).onclick=$('cfv-'+v).onclick=function(){CV=v;try{localStorage.setItem('lst-cview',v)}catch(e){}renderCV();cfsLayout()}});
 (function(){
@@ -1917,7 +1910,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=25; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=26; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2273,10 +2266,6 @@ function cueUI(){
     $('cue-'+g+'-st').textContent=cueNote[g]||(dirty?'En préparation · différent du master':'En préparation · identique au master');
     $('cue-'+g+'-off').textContent=dirty?'Abandonner et quitter':'Quitter le cue';
     ['off','mix','split'].forEach(function(v){var b=$('cue-'+g+'-m-'+v);b.setAttribute('aria-pressed',mon===v);if(v==='split')b.hidden=guest;if(v==='mix')b.textContent=guest?'Cet appareil':'Sortie master'});
-    $('cue-'+g+'-mh').textContent=mon==='off'?'Écoute coupée : tu prépares sans entendre, le niveau à droite montre que ça joue.'
-      :mon==='split'?'Split : le master sort à gauche, le cue à droite. Il faut un câble séparateur, casque sur la voie droite.'
-      :guest?'Le cue sort sur cet appareil, calé sur le master. Rien ne part vers l\'enceinte tant que tu n\'envoies pas.'
-      :'Le cue sort par la même sortie que le master, par-dessus lui. Pour l\'entendre seul au casque, passe en Split.';
   });
 }
 ['b','y','d'].forEach(function(g){
@@ -2285,7 +2274,7 @@ function cueUI(){
   row.appendChild(mk('span','lbl','Écoute du cue'));
   [['off','Coupée'],['mix','Sortie master'],['split','Split G/D']].forEach(function(o){var b=mk('button','btn',o[1]);b.type='button';b.id='cue-'+g+'-m-'+o[0];b.onclick=function(){setMon(o[0])};seg.appendChild(b)});
   bar2.id='cue-'+g+'-lv';lv.setAttribute('aria-hidden','true');lv.appendChild(bar2);row.appendChild(seg);row.appendChild(lv);
-  var h=mk('span','hint cuemh');h.id='cue-'+g+'-mh';row.appendChild(h);bar.parentNode.insertBefore(row,bar.nextSibling); /* hors de la barre collante, pour ne pas manger l'écran */
+  bar.parentNode.insertBefore(row,bar.nextSibling); /* hors de la barre collante, pour ne pas manger l'écran */
   $('cue-'+g+'-on').onclick=function(){cueOn(g)};$('cue-'+g+'-send').onclick=function(){cueSend(g)};$('cue-'+g+'-off').onclick=function(){cueOff(g)};
 });
 /* côté hôte : les cues reçus pendant la lecture attendent le début de la mesure suivante */
