@@ -917,12 +917,14 @@ function cueEng(){
   ENG[1]=mkEng(cm);cm.connect(cl);cl.connect(cueOut);
   cueAn=ctx.createAnalyser();cueAn.fftSize=256;cueOut.connect(cueAn);
 }
-/* Où s'entend le cue : 'mix' (sortie de l'appareil), 'split' (master à gauche, cue à droite) ou 'off'. */
-var MON='mix';try{var mon0=localStorage.getItem('lst-cuemon');if(mon0==='off'||mon0==='split')MON=mon0}catch(e){}
+/* Où s'entend le cue. Chez un invité : sur son appareil ('mix') ou nulle part ('off').
+   Sur le master ou en solo, le cue ne sort jamais avec le master : il est muet ('off'), ou en split
+   ('split' : master à gauche, cue à droite, pour un casque sur câble séparateur). */
+var MONG='mix',MONM='off';try{if(localStorage.getItem('lst-cuemon-g')==='off')MONG='off';if(localStorage.getItem('lst-cuemon-m')==='split')MONM='split'}catch(e){}
 function routeOut(){
-  if(!ctx)return;var t=ctx.currentTime,split=MON==='split'&&NET.role!=='guest'&&cueAny();
+  if(!ctx)return;var t=ctx.currentTime,guest=NET.role==='guest',split=!guest&&MONM==='split'&&cueAny();
   dirG.gain.setTargetAtTime(split?0:1,t,.01);splitG.gain.setTargetAtTime(split?1:0,t,.01);
-  cueDirG.gain.setTargetAtTime(!split&&MON!=='off'&&cueAny()?1:0,t,.01);
+  cueDirG.gain.setTargetAtTime(guest&&MONG==='mix'&&cueAny()?1:0,t,.01);
 }
 function outLat(){return ctx?Math.round(((ctx.baseLatency||0)+(ctx.outputLatency||0))*1000):0}
 /* Exécute fn sur le moteur du cue, avec l'état affiché à l'écran. */
@@ -1910,7 +1912,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=26; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=27; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2255,9 +2257,10 @@ function cueOff(g){
   if(NET.role==='guest'&&!cueAny()&&ctx){try{ctx.suspend()}catch(e){}try{if(silent)silent.pause()}catch(e){}}
   applyParams();routeOut();audioState();cueUI();
 }
-function setMon(v){MON=v;try{localStorage.setItem('lst-cuemon',v)}catch(e){}routeOut();cueUI()}
+function setMon(v){var guest=NET.role==='guest';if(guest)MONG=v==='mix'?'mix':'off';else MONM=v==='split'?'split':'off';
+  try{localStorage.setItem(guest?'lst-cuemon-g':'lst-cuemon-m',guest?MONG:MONM)}catch(e){}routeOut();cueUI()}
 function cueUI(){
-  var guest=NET.role==='guest',show=!guest||!!NET.joined,mon=guest&&MON==='split'?'mix':MON;
+  var guest=NET.role==='guest',show=!guest||!!NET.joined,mon=guest?MONG:MONM;
   ['b','y','d'].forEach(function(g){
     var on=show&&CUE[g],dirty=on&&cueDirty(g),z=document.querySelector('.'+ZK[g]);
     $('cue-'+g).hidden=!show;z.classList.toggle('cue',!!on);
@@ -2265,14 +2268,14 @@ function cueUI(){
     if(!on)return;
     $('cue-'+g+'-st').textContent=cueNote[g]||(dirty?'En préparation · différent du master':'En préparation · identique au master');
     $('cue-'+g+'-off').textContent=dirty?'Abandonner et quitter':'Quitter le cue';
-    ['off','mix','split'].forEach(function(v){var b=$('cue-'+g+'-m-'+v);b.setAttribute('aria-pressed',mon===v);if(v==='split')b.hidden=guest;if(v==='mix')b.textContent=guest?'Cet appareil':'Sortie master'});
+    ['off','mix','split'].forEach(function(v){var b=$('cue-'+g+'-m-'+v);b.setAttribute('aria-pressed',mon===v);if(v==='split')b.hidden=guest;if(v==='mix'){b.hidden=!guest;b.style.borderRadius=guest?'0 5px 5px 0':''}});
   });
 }
 ['b','y','d'].forEach(function(g){
   var bar=$('cue-'+g),row=mk('div','cuemon'),seg=mk('div','seg'),lv=mk('div','zm cuelv'),bar2=mk('i');
   row.id='cue-'+g+'-mon';row.hidden=true;seg.setAttribute('role','group');seg.setAttribute('aria-label','Écoute du cue');
   row.appendChild(mk('span','lbl','Écoute du cue'));
-  [['off','Coupée'],['mix','Sortie master'],['split','Split G/D']].forEach(function(o){var b=mk('button','btn',o[1]);b.type='button';b.id='cue-'+g+'-m-'+o[0];b.onclick=function(){setMon(o[0])};seg.appendChild(b)});
+  [['off','Coupée'],['mix','Cet appareil'],['split','Split G/D']].forEach(function(o){var b=mk('button','btn',o[1]);b.type='button';b.id='cue-'+g+'-m-'+o[0];b.onclick=function(){setMon(o[0])};seg.appendChild(b)});
   bar2.id='cue-'+g+'-lv';lv.setAttribute('aria-hidden','true');lv.appendChild(bar2);row.appendChild(seg);row.appendChild(lv);
   bar.parentNode.insertBefore(row,bar.nextSibling); /* hors de la barre collante, pour ne pas manger l'écran */
   $('cue-'+g+'-on').onclick=function(){cueOn(g)};$('cue-'+g+'-send').onclick=function(){cueSend(g)};$('cue-'+g+'-off').onclick=function(){cueOff(g)};
