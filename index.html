@@ -158,6 +158,9 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .keys.live .key:nth-child(7){--k:4}
 .keys.live .key:nth-child(9){--k:5}
 .keys.live .key:nth-child(11){--k:6}
+/* seul repère : un point sur les deux Do */
+.keys.live .key:nth-child(1)::after,.keys.live .key:nth-child(13)::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--key-ink);opacity:.35}
+.livebox{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .key.down{box-shadow:inset 0 -9px 0 var(--led)}
 .keys.live .key.bk.down{box-shadow:inset 0 -9px 0 var(--led),0 2px 3px rgba(0,0,0,.35)}
 /* clavier live en plein écran : il recouvre tout, les touches prennent toute la hauteur */
@@ -1867,7 +1870,7 @@ function liveKb(boxId,on,off){
   var box=$(boxId),held={},els=[];
   function relAll(){if(!Object.keys(held).length)return;held={};off();show()}
   kbRel.push(relAll);box._rel=relAll;
-  NOTE.forEach(function(n,i){var b=document.createElement('button');b.className='key'+(BLACK.indexOf(i)>=0?' bk':'');b.textContent=n;b.setAttribute('data-n',i);
+  NOTE.forEach(function(n,i){var b=document.createElement('button');b.className='key'+(BLACK.indexOf(i)>=0?' bk':'');b.setAttribute('data-n',i); /* aucun texte dans les touches : sur téléphone, un appui long sur du texte ouvre le menu « Copier » */
     b.setAttribute('aria-label','Jouer '+n+(i===12?' aigu':''));box.appendChild(b);els.push(b);
     b.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.repeat){e.preventDefault();on(i,false);setTimeout(off,250)}})});
   function keyAt(e){var el=document.elementFromPoint(e.clientX,e.clientY);return el&&el.parentNode===box?+el.getAttribute('data-n'):-1}
@@ -2127,7 +2130,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=39; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=40; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
