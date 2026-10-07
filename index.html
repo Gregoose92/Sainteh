@@ -65,6 +65,9 @@ button,select,input{font:inherit;color:inherit}
 .transport{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .bpm{font-family:var(--f-mono);background:var(--well);color:var(--led);padding:6px 10px;border-radius:4px;font-size:22px;min-width:96px;text-align:right}
 .bpm small{font-size:11px;color:var(--well-ink);margin-left:4px}
+button.bpm{border:0;cursor:pointer;line-height:inherit}
+button.bpm[aria-expanded="true"]{box-shadow:0 0 0 2px var(--led)}
+button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .btn{background:var(--btn);border:1px solid var(--line);border-radius:5px;padding:7px 12px;font-weight:600;font-size:13px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
 .btn:hover{border-color:var(--ink)}
 .btn[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
@@ -278,8 +281,11 @@ html.fsl,html.fsl body{overflow:hidden}
 .rtag{justify-self:end;padding:2px 7px;border-radius:4px;background:var(--zc);color:var(--zon);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .btn.gout{padding:5px 9px;font-size:11px}
 #n-name{width:9em}
-#bpm-pm{display:flex;gap:4px}
-#bpm-pm[hidden]{display:none}
+/* réglage du tempo : s'ouvre sous la barre quand on touche l'afficheur */
+.bpmed{flex:1 1 100%;display:flex;align-items:center;gap:8px}
+.bpmed[hidden]{display:none}
+.bpmed input{flex:1 1 auto;min-width:0;height:36px;accent-color:var(--led)}
+.bpmed .btn{flex:0 0 auto;min-width:44px;min-height:40px;font-size:18px;padding:4px 10px}
 #reqbar{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:70;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--c-m);color:var(--on-c);font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 #reqbar[hidden]{display:none}
 #reqbar span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
@@ -326,12 +332,16 @@ html.fsl,html.fsl body{overflow:hidden}
     </div>
   </div>
   <div class="tbar" id="tbar">
-      <div class="bpm" aria-live="off"><span id="bpmv">130</span><small>BPM</small></div>
+      <button class="bpm" id="bpm-btn" aria-expanded="false" aria-controls="bpm-ed" aria-label="Tempo : toucher pour régler"><span id="bpmv">130</span><small>BPM</small></button>
       <button class="btn run" id="play" aria-pressed="false">▶ Lecture</button>
-      <span id="bpm-pm" hidden><button class="btn" id="bpm-dn" aria-label="Tempo moins 1">−</button><button class="btn" id="bpm-up" aria-label="Tempo plus 1">+</button></span>
       <button class="btn" id="rew" title="Revenir au premier pas">⏮ Début</button>
       <button class="btn primary" id="upd-top" hidden>Mettre à jour</button>
       <span id="astate" class="lbl" role="status" data-ok>Audio en attente</span>
+      <div class="bpmed" id="bpm-ed" hidden>
+        <button class="btn" id="bpm-dn" aria-label="Tempo moins 1">−</button>
+        <input type="range" id="bpm-r" min="60" max="200" step="1" value="130" aria-label="Tempo en BPM">
+        <button class="btn" id="bpm-up" aria-label="Tempo plus 1">+</button>
+      </div>
   </div>
 
   <section class="zone zn">
@@ -409,6 +419,7 @@ html.fsl,html.fsl body{overflow:hidden}
     <label class="lbl" for="b-preset">Preset basse</label>
     <select class="sel psel" id="b-preset"></select>
   </div>
+  <div id="khid" hidden></div>
   <div class="knobs" id="knobs">
     <div class="wave wide">
       <span class="lbl">Onde</span>
@@ -756,7 +767,7 @@ function S(g,n,o,a,s){return {g:g,n:n,o:o,a:!!a,s:!!s}}
 var pat=[S(1,9,0,1,0),S(1,9,0,0,0),S(1,9,1,0,1),S(1,0,0,0,0),S(0,9,0,0,0),S(1,9,0,0,1),S(1,7,0,1,0),S(1,9,-1,0,0),
          S(1,9,0,0,0),S(0,9,0,0,0),S(1,4,0,1,1),S(1,7,0,0,0),S(1,9,0,0,0),S(1,9,1,1,0),S(0,9,0,0,0),S(1,3,0,0,1)];
 var KN=[
- {id:'tempo',label:'Tempo',def:.5,fmt:function(v){return bpmOf(v)+''}},
+ {id:'tempo',label:'Tempo',def:.5,box:'khid',fmt:function(v){return bpmOf(v)+''}}, /* réglé depuis l'afficheur BPM de la barre du haut */
  {id:'tune',label:'Tune',def:.5,fmt:function(v){var s=tuneOf(v);return (s>0?'+':'')+s+' st'}},
  {id:'cutoff',label:'Cutoff',def:.42,fmt:function(v){return Math.round(cutHz(v))+' Hz'}},
  {id:'res',label:'Résonance',def:.7,fmt:pct},
@@ -1117,7 +1128,7 @@ function setKnob(id,v){if(!can(PG[id]))return;P[id]=Math.max(0,Math.min(1,v));if
 var ZV={vol:'b',yvol:'y',lmast:'l',dvol:'d',cvol:'c'};
 function drawKnob(id){if(ZV[id])$('zv-'+ZV[id]).value=Math.round(P[id]*100);var o=knobEls[id],v=P[id];o.kn.style.setProperty('--a',(-135+v*270)+'deg');
   var txt=o.cfg.fmt(v);o.v.textContent=txt;o.kn.setAttribute('aria-valuenow',Math.round(v*100));o.kn.setAttribute('aria-valuetext',txt);
-  if(id==='tempo')$('bpmv').textContent=bpmOf(v)}
+  if(id==='tempo'){$('bpmv').textContent=bpmOf(v);$('bpm-r').value=bpmOf(v)}}
 function setWave(w){wave=w;B.preset='';renderB();applyParams();save()}
 $('w-saw').onclick=function(){setWave('sawtooth')};$('w-sq').onclick=function(){setWave('square')};$('w-tri').onclick=function(){setWave('triangle')};
 
@@ -1980,7 +1991,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=33; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=34; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2478,6 +2489,7 @@ function permGot(p,den){
   renderZ();nui();
   nmsg(waited?'Le master t\'a accepté. Tes accès : '+pnames(p)+'.':got?'Le master t\'a ouvert : '+pnames(got)+'.':den?'':'Le master a modifié tes accès : '+pnames(p)+'.');
 }
+function bpmEd(on){$('bpm-ed').hidden=!on;$('bpm-btn').setAttribute('aria-expanded',on?'true':'false');tbarH()}
 function permUI(){
   var guest=NET.role==='guest',off=guest&&(NET.wait||NET.denied||!(hconn&&hconn.open));
   ['b','y','l','c','d'].forEach(function(g){
@@ -2490,7 +2502,7 @@ function permUI(){
   });
   var t=!can('t');$('play').disabled=t;$('rew').disabled=t;$('fill').disabled=!can('d');
   knobEls.tempo.kn.parentNode.classList.toggle('klock',t);knobEls.tempo.kn.tabIndex=t?-1:0;
-  $('bpm-pm').hidden=!(guest&&!t&&!can('b')); /* la basse est verrouillée : le potard de tempo est caché, on en donne un autre */
+  $('bpm-btn').disabled=t;if(t)bpmEd(false);
 }
 ['b','y','l','c','d'].forEach(function(g){
   var bar=mk('div','lockbar'),t=mk('span','lbl'),b=mk('button','btn','Demander l\'accès');
@@ -2509,7 +2521,15 @@ function permUI(){
   inp.addEventListener('input',function(){clearTimeout(t);t=setTimeout(push,500)});inp.addEventListener('change',function(){clearTimeout(t);push()});
   $('n-ask').onclick=function(){NET.denied=false;nmsg('Nouvelle demande envoyée au master…');nui();gconnect()};
   function bpm(d){setKnob('tempo',(bpmOf(P.tempo)+d-60)/140)}
-  $('bpm-dn').onclick=function(){bpm(-1)};$('bpm-up').onclick=function(){bpm(1)};
+  /* − et + : un appui change d'un BPM, un appui maintenu défile */
+  [['bpm-dn',-1],['bpm-up',1]].forEach(function(o){var b=$(o[0]),h=0,r=0,moved=false;
+    function end(){clearTimeout(h);clearInterval(r);h=r=0}
+    b.addEventListener('pointerdown',function(){moved=false;end();h=setTimeout(function(){moved=true;r=setInterval(function(){bpm(o[1])},70)},400)});
+    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){b.addEventListener(ev,end)});
+    b.onclick=function(){if(!moved)bpm(o[1]);moved=false}});
+  $('bpm-r').addEventListener('input',function(){setKnob('tempo',(this.value-60)/140)});
+  $('bpm-btn').onclick=function(){bpmEd($('bpm-ed').hidden)};
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('bpm-ed').hidden)bpmEd(false)});
 })();
 
 /* ----- pads : cinq mémoires par instrument, rappelées d'un appui -----
