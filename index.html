@@ -148,9 +148,18 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .flags.one{grid-template-columns:1fr}
 .keys.live{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .livebox.fs,.livebox.fs .btn{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.keys.live .key{height:72px}
-.keys.live .key.bk{height:54px}
+/* clavier live dessiné comme un vrai clavier : les huit blanches se touchent, les noires, plus courtes et plus étroites, sont posées en haut à cheval sur deux blanches */
+.keys.live{position:relative;display:flex;gap:0;height:84px}
+.keys.live .key{flex:1 1 0;min-width:0;height:100%;margin-left:-1px;border-radius:0 0 5px 5px}
+.keys.live .key:first-child{margin-left:0}
+.keys.live .key.bk{position:absolute;top:0;z-index:2;flex:none;margin:0;width:7.75%;height:60%;left:calc(var(--k)*12.5% - 3.875%);border-radius:0 0 4px 4px;box-shadow:0 2px 3px rgba(0,0,0,.35)}
+.keys.live .key:nth-child(2){--k:1}
+.keys.live .key:nth-child(4){--k:2}
+.keys.live .key:nth-child(7){--k:4}
+.keys.live .key:nth-child(9){--k:5}
+.keys.live .key:nth-child(11){--k:6}
 .key.down{box-shadow:inset 0 -9px 0 var(--led)}
+.keys.live .key.bk.down{box-shadow:inset 0 -9px 0 var(--led),0 2px 3px rgba(0,0,0,.35)}
 /* clavier live en plein écran : il recouvre tout, les touches prennent toute la hauteur */
 .livebox .kfs-only{display:none}
 .livebox>.edrow .sp{margin-left:auto}
@@ -158,16 +167,19 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
   padding:calc(10px + env(safe-area-inset-top,0px)) calc(10px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(10px + env(safe-area-inset-left,0px))}
 .livebox.fs .kfs-only{display:inline-block}
 .livebox.fs .hint{display:none}
-.livebox.fs .keys.live{flex:1 1 0;min-height:0;gap:4px;grid-template-rows:minmax(0,1fr);align-items:start}
-.livebox.fs .keys.live .key{height:100%;font-size:15px;padding-bottom:14px;border-radius:6px}
-.livebox.fs .keys.live .key.bk{height:62%}
+.livebox.fs .keys.live{flex:1 1 0;min-height:0;height:auto}
+.livebox.fs .keys.live .key{font-size:15px;padding-bottom:14px;border-radius:0 0 8px 8px}
+.livebox.fs .keys.live .key.bk{border-radius:0 0 6px 6px}
 .livebox.fs .key.down{box-shadow:inset 0 -16px 0 var(--led)}
+.livebox.fs .keys.live .key.bk.down{box-shadow:inset 0 -16px 0 var(--led),0 2px 3px rgba(0,0,0,.35)}
 /* téléphone tenu debout : les touches deviennent des barres empilées, grave en bas, bien plus larges sous le doigt */
 @media (orientation:portrait) and (max-width:600px){
-  .livebox.fs .keys.live{display:flex;flex-direction:column-reverse;align-items:stretch}
-  .livebox.fs .keys.live .key{flex:1 1 0;min-height:0;height:auto;width:100%;align-items:center;justify-content:flex-start;padding:0 0 0 14px}
-  .livebox.fs .keys.live .key.bk{height:auto;width:62%}
+  .livebox.fs .keys.live{flex-direction:column-reverse;align-items:stretch}
+  .livebox.fs .keys.live .key{min-height:0;height:auto;width:100%;margin:-1px 0 0;align-items:center;justify-content:flex-start;padding:0 0 0 14px;border-radius:8px 0 0 8px}
+  .livebox.fs .keys.live .key:first-child{margin-top:-1px}
+  .livebox.fs .keys.live .key.bk{left:auto;right:0;top:auto;bottom:calc(var(--k)*12.5% - 3.875%);width:60%;height:7.75%;margin:0;border-radius:6px 0 0 6px}
   .livebox.fs .key.down{box-shadow:inset 16px 0 0 var(--led)}
+  .livebox.fs .keys.live .key.bk.down{box-shadow:inset 16px 0 0 var(--led),0 2px 3px rgba(0,0,0,.35)}
 }
 .lpads{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .lpad{min-height:52px;padding:8px 4px;text-align:center;min-width:0}
@@ -2115,7 +2127,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=38; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=39; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
