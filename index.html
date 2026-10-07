@@ -146,7 +146,8 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .wave.wide{grid-column:1/-1;flex-direction:row;justify-content:flex-start;gap:10px;flex-wrap:wrap}
 .screen #yroll{height:110px;flex:1 1 100%;width:100%}
 .flags.one{grid-template-columns:1fr}
-.keys.live{touch-action:none;user-select:none;-webkit-user-select:none}
+.keys.live{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.livebox.fs,.livebox.fs .btn{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .keys.live .key{height:72px}
 .keys.live .key.bk{height:54px}
 .key.down{box-shadow:inset 0 -9px 0 var(--led)}
@@ -1846,15 +1847,30 @@ function latency(){if(!ctx)return;var l=Math.round(((ctx.baseLatency||0)+(ctx.ou
   ['lat-b','lat-y'].forEach(function(id){if($(id).textContent!==m)$(id).textContent=m})}
 setInterval(latency,2000);
 
+/* Nombre de doigts réellement posés sur l'écran, tenu à jour par les événements tactiles. Il sert de garde-fou :
+   si un clavier croit tenir plus de touches qu'il n'y a de doigts, c'est qu'un relâchement s'est perdu. */
+var TCH=0,kbFix=[];
+['touchstart','touchend','touchcancel'].forEach(function(ev){document.addEventListener(ev,function(e){
+  TCH=e.touches.length;if(ev!=='touchstart')setTimeout(function(){kbFix.forEach(function(f){f(false)})},60)},{capture:true,passive:true})});
+window.addEventListener('blur',function(){kbFix.forEach(function(f){f(true)})});
+document.addEventListener('visibilitychange',function(){if(document.hidden)kbFix.forEach(function(f){f(true)})});
 function liveKb(boxId,on,off){
-  var box=$(boxId),held={},els=[];
+  var box=$(boxId),held={},kind={},els=[];
+  /* all : tout relâcher ; sinon, ne relâcher que les touches tactiles en trop par rapport aux doigts posés */
+  function fix(all){
+    var ids=Object.keys(held).sort(function(a,b){return a-b}),n=ids.length;if(!n)return;
+    if(all)held={};
+    else{var t=ids.filter(function(id){return kind[id]==='touch'}),extra=t.length-TCH;if(extra<=0)return;t.slice(0,extra).forEach(function(id){delete held[id]})}
+    var rest=Object.keys(held);if(rest.length)on(held[rest[rest.length-1]],true);else off();show();
+  }
+  kbFix.push(fix);box._rel=function(){fix(true)};
   NOTE.forEach(function(n,i){var b=document.createElement('button');b.className='key'+(BLACK.indexOf(i)>=0?' bk':'');b.textContent=n;b.setAttribute('data-n',i);
     b.setAttribute('aria-label','Jouer '+n+(i===12?' aigu':''));box.appendChild(b);els.push(b);
     b.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.repeat){e.preventDefault();on(i,false);setTimeout(off,250)}})});
   function keyAt(e){var el=document.elementFromPoint(e.clientX,e.clientY);return el&&el.parentNode===box?+el.getAttribute('data-n'):-1}
   function show(){var act={};for(var id in held)act[held[id]]=1;for(var i=0;i<els.length;i++){var d=!!act[i];if(els[i]._d!==d){els[i]._d=d;els[i].classList.toggle('down',d)}}}
   box.addEventListener('pointerdown',function(e){var tg=e.target,n=tg&&tg.parentNode===box?+tg.getAttribute('data-n'):keyAt(e);if(n<0)return;e.preventDefault();try{box.setPointerCapture(e.pointerId)}catch(x){}
-    var was=Object.keys(held).length;held[e.pointerId]=n;on(n,was>0);show()});
+    var was=Object.keys(held).length;held[e.pointerId]=n;kind[e.pointerId]=e.pointerType;on(n,was>0);show()});
   box.addEventListener('pointermove',function(e){if(!(e.pointerId in held))return;var n=keyAt(e);if(n>=0&&n!==held[e.pointerId]){held[e.pointerId]=n;on(n,true);show()}});
   function up(e){if(!(e.pointerId in held))return;delete held[e.pointerId];var rest=Object.keys(held);if(rest.length)on(held[rest[rest.length-1]],true);else off();show()}
   box.addEventListener('pointerup',up);box.addEventListener('pointercancel',up);box.addEventListener('lostpointercapture',up);
@@ -2019,20 +2035,32 @@ function kfsSet(g){
   g=g==='b'||g==='y'?g:'';if(g===KFS)return;
   var p;if(g&&CFS)cfsSet(false);
   if(g&&!KFS)kfsY=window.scrollY; /* le bloc sort du flux : on retiendra où en était la page */
-  if(KFS){liveOff(KFS,'me')} /* aucune note ne doit rester tenue en changeant d'affichage */
+  ['b','y'].forEach(function(x){try{$('lkeys-'+x)._rel()}catch(e){}});if(KFS)liveOff(KFS,'me'); /* aucune note ne doit rester tenue en changeant d'affichage */
   KFS=g;
   ['b','y'].forEach(function(x){var on=x===g,b=$('l'+x+'-fs');$('live-'+x).classList.toggle('fs',on);b.textContent=on?'✕ Quitter':'Plein écran';b.setAttribute('aria-pressed',on?'true':'false')});
   document.documentElement.classList.toggle('fsl',!!g||CFS);
+  /* Pas de plein écran « système » ici : sur iPad, Safari y surveille les appuis répétés (il croit à une saisie au clavier)
+     et peut interrompre les doigts en cours. Le clavier recouvre simplement toute la page. */
   if(g){
-    var el=$('live-'+g);
-    try{var rq=el.requestFullscreen||el.webkitRequestFullscreen;if(rq){p=rq.call(el);if(p&&p.catch)p.catch(function(){})}}catch(e){}
     try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){kfsLock=l},function(){})}catch(e){}
   }else{
-    try{if(document.fullscreenElement||document.webkitFullscreenElement){var ex=document.exitFullscreen||document.webkitExitFullscreen;p=ex.call(document);if(p&&p.catch)p.catch(function(){})}}catch(e){}
     try{if(kfsLock){kfsLock.release();kfsLock=null}}catch(e){}
     window.scrollTo(0,kfsY);
   }
 }
+/* En plein écran, les boutons de la barre réagissent dès que le doigt se pose : iOS n'envoie pas de « clic »
+   tant qu'un autre doigt tient une touche, ce qui rendait « Quitter » et les octaves inopérants en jouant. */
+var kfsSw=false,kfsProg=false;
+document.addEventListener('pointerdown',function(){kfsSw=false},true); /* tout nouveau geste repart de zéro */
+['b','y'].forEach(function(g){
+  var box=$('live-'+g);
+  box.addEventListener('pointerdown',function(e){
+    if(KFS!==g)return;var b=e.target&&e.target.closest?e.target.closest('.edrow .btn'):null;if(!b||b.disabled)return;
+    e.preventDefault();kfsProg=true;try{b.click()}finally{kfsProg=false}kfsSw=true;
+  });
+});
+/* le « clic » que le navigateur envoie ensuite, quand le doigt se lève, ne doit pas agir une seconde fois (ni rouvrir le plein écran) */
+document.addEventListener('click',function(e){if(kfsSw&&!kfsProg){kfsSw=false;e.stopPropagation();e.preventDefault()}},true);
 ['b','y'].forEach(function(g){
   $('l'+g+'-fs').onclick=function(){kfsSet(KFS===g?'':g)};
   $('l'+g+'-play').onclick=function(){playing?stop():start()};
@@ -2095,7 +2123,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=36; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=37; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
