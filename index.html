@@ -318,7 +318,10 @@ html.fsl,html.fsl body{overflow:hidden}
 .req{border:2px dashed var(--zc);background:color-mix(in srgb,var(--zc) 14%,var(--panel))}
 .rtag{justify-self:end;padding:2px 7px;border-radius:4px;background:var(--zc);color:var(--zon);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .btn.gout{padding:5px 9px;font-size:11px}
-#n-name{width:9em}
+#n-name,#n-nick-i{width:9em}
+#n-nick{border:2px solid var(--zc)}
+#n-solo.nick>*:not(#n-nick){display:none}
+#n-nick-i{font-size:16px}
 /* réglage du tempo : s'ouvre sous la barre quand on touche l'afficheur */
 .bpmed{flex:1 1 100%;display:flex;align-items:center;gap:8px}
 .bpmed[hidden]{display:none}
@@ -394,6 +397,15 @@ html.fsl,html.fsl body{overflow:hidden}
         <input class="sel" id="n-code" maxlength="5" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABCDE">
         <button class="btn" id="n-join">Rejoindre</button>
       </div>
+      <form class="npanel" id="n-nick" novalidate hidden>
+        <div class="nphead"><h3 id="n-nick-t">Ton pseudo</h3><span class="lbl" id="n-nick-c"></span></div>
+        <div class="edrow">
+          <label class="lbl" for="n-nick-i">Le master te verra sous ce nom</label>
+          <input class="sel" id="n-nick-i" maxlength="16" autocomplete="nickname" autocorrect="off" spellcheck="false" placeholder="Pseudo" required>
+          <button class="btn primary" id="n-nick-ok" type="submit">Rejoindre la session</button>
+          <button class="btn" id="n-nick-x" type="button">Annuler</button>
+        </div>
+      </form>
     </div>
     <div class="editor" id="n-on" hidden>
       <section class="npanel" id="acc" hidden aria-labelledby="acc-t">
@@ -417,8 +429,8 @@ html.fsl,html.fsl body{overflow:hidden}
           </div>
         </div>
         <div class="edrow" id="n-me" hidden>
-          <label class="lbl" for="n-name">Ton nom</label>
-          <input class="sel" id="n-name" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Invité">
+          <label class="lbl" for="n-name">Ton pseudo</label>
+          <input class="sel" id="n-name" maxlength="16" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Pseudo">
           <span class="lbl" id="n-acc" role="status"></span>
           <button class="btn primary" id="n-ask" hidden>Redemander l'accès</button>
         </div>
@@ -2138,7 +2150,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=41; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=42; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2240,7 +2252,7 @@ function hostRx(c,m){
   switch(m.t){
     case 'hi':
       netFlush();c._ok=true;if((m.b|0)>BUILD){NET.upd=m.b|0;nver()} /* un invité a une version plus récente : elle existe donc */
-      var gid=String(m.id||c._id).slice(0,40),a=ACC[gid],nm=gname(m.n);c._gid=gid;
+      var gid=String(m.id||c._id).slice(0,40),a=ACC[gid],nm=gname(m.n);c._gid=gid;if(nm)nm=nameFree(nm,gid);
       if(a&&a.ok){if(nm)a.n=nm;c._pm=a.p;c._lv=lclean(a.lv);c._wait=false} /* déjà accepté dans cette session : il retrouve ses accès */
       else{a=ACC[gid]={n:nm||'Invité '+(GN[gid]||(GN[gid]=++gseq)),p:'',ok:false};c._pm='';c._lv='';c._wait=true}
       c._n=a.n;accSave();
@@ -2250,7 +2262,7 @@ function hostRx(c,m){
       if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle du master : recharge-la pour avoir toutes les fonctions.'});
       LK.forEach(function(q){if(lbuf[q])netLoop(q,c)});
       PADG.forEach(function(g){PADS[g].forEach(function(d,q){if(d)netTo(c,{t:'pd',g:g,i:q,d:d})})});npeers();break;
-    case 'nm':var nn=gname(m.n);if(nn){c._n=nn;if(ACC[c._gid])ACC[c._gid].n=nn;accSave();reqUI();nui()}break;
+    case 'nm':var nn=gname(m.n);if(nn){nn=nameFree(nn,c._gid);c._n=nn;if(ACC[c._gid])ACC[c._gid].n=nn;accSave();reqUI();nui()}break;
     case 'rq':var rg=pclean(m.g).split('').filter(function(g){return c._pm.indexOf(g)<0}).join('');if(rg)reqAdd(c,rg);break;
     case 'st':
       /* on retire ce qui touche un instrument non accordé, et on renvoie à l'invité la vraie valeur pour qu'il reste calé */
@@ -2397,7 +2409,16 @@ function netFile(ab,name,k){
     if(i<n)setTimeout(pump,15);
   })();
 }
+/* Un invité ne se présente au master qu'avec un pseudo. S'il en a déjà un (session précédente, rechargement, mise à jour),
+   il rejoint directement ; sinon on le lui demande d'abord. */
+function guestJoin(code){
+  if(myName()){guestStart(code);return}
+  Z.m=true;renderZ();$('n-solo').classList.add('nick');$('n-nick').hidden=false;$('n-nick-c').textContent='Session '+code;$('n-nick')._code=code;
+  nmsg('Choisis un pseudo pour rejoindre la session '+code+'.');
+  try{$('n-nick').scrollIntoView({block:'center'});$('n-nick-i').focus({preventScroll:true})}catch(e){}
+}
 function guestStart(code){
+  $('n-nick').hidden=true;$('n-solo').classList.remove('nick');
   if(playing)stop();
   if(ctx){try{ctx.suspend()}catch(e){}}try{if(silent)silent.pause()}catch(e){}
   zan=null;['b','y','l','d','c'].forEach(function(z){$('zm-'+z).style.transform='scaleX(0)'});
@@ -2544,6 +2565,13 @@ function mk(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cl
 function accSave(){try{sessionStorage.setItem('lst-acc',JSON.stringify({a:ACC,n:gseq}))}catch(e){}}
 function accLoad(){ACC={};gseq=0;try{var j=JSON.parse(sessionStorage.getItem('lst-acc')||'null');if(j&&j.a&&typeof j.a==='object'){for(var k in j.a){var a=j.a[k];if(a&&a.ok)ACC[k]={n:gname(a.n)||'Invité',p:pclean(a.p),lv:String(a.lv||''),ok:true}}gseq=j.n|0}}catch(e){}}
 function reqDefault(c){var taken='',r='';conns.forEach(function(o){if(o!==c&&o._ok&&!o._wait&&!o._gone)taken+=o._pm});'bylcd'.split('').forEach(function(g){if(taken.indexOf(g)<0)r+=g});return r}
+/* Deux invités présents ne portent jamais le même nom à l'écran du master : le second reçoit un numéro. */
+function nameFree(n,gid){
+  var used={};conns.forEach(function(o){if(o._ok&&!o._gone&&o._gid!==gid&&o._n)used[String(o._n).toLowerCase()]=1});
+  if(!used[n.toLowerCase()])return n;
+  for(var i=2;i<50;i++){var v=n.slice(0,15-String(i).length)+' '+i;if(!used[v.toLowerCase()])return v}
+  return n;
+}
 function reqAdd(c,want){
   var r=null;REQ.forEach(function(x){if(x.c===c&&!x.live)r=x});
   if(!r){r={c:c,want:'',sel:c._wait?reqDefault(c):c._pm};REQ.push(r)}
@@ -2663,7 +2691,8 @@ function guestsUI(){
 /* -- côté invité -- */
 function myId(){var v='';try{v=localStorage.getItem('lst-id')||''}catch(e){}
   if(!/^[a-z0-9]{8,20}$/.test(v)){v=memId||(memId=(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)).slice(0,14));try{localStorage.setItem('lst-id',v)}catch(e){}}return v}
-function myName(){try{return gname(localStorage.getItem('lst-name'))}catch(e){return ''}}
+var memName='';
+function myName(){try{return gname(localStorage.getItem('lst-name'))||memName}catch(e){return memName}}
 function permGot(p,den){
   var was=NET.wait||NET.pm==null?'':NET.pm,waited=NET.wait,got='';
   NET.pm=p;NET.wait=false;
@@ -2735,7 +2764,15 @@ function permUI(){
 (function(){
   var inp=$('n-name'),t=0;inp.value=myName();
   function push(){var n=gname(inp.value);try{localStorage.setItem('lst-name',n)}catch(e){}if(n&&NET.role==='guest'&&hconn&&hconn.open)try{hconn.send({t:'nm',n:n})}catch(e){}}
-  inp.addEventListener('input',function(){clearTimeout(t);t=setTimeout(push,500)});inp.addEventListener('change',function(){clearTimeout(t);push()});
+  inp.addEventListener('input',function(){clearTimeout(t);if(gname(inp.value))t=setTimeout(push,500)});
+  inp.addEventListener('change',function(){clearTimeout(t);if(!gname(inp.value)){inp.value=myName();return}push()}); /* un pseudo vide est refusé : on remet le précédent */
+  $('n-nick-x').onclick=function(){$('n-nick').hidden=true;$('n-solo').classList.remove('nick');$('n-nick')._code='';nmsg('');try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}};
+  $('n-nick').addEventListener('submit',function(e){
+    e.preventDefault();var n=gname($('n-nick-i').value),code=$('n-nick')._code;
+    if(!n){nmsg('Il faut un pseudo pour rejoindre la session.');try{$('n-nick-i').focus()}catch(x){}return}
+    try{localStorage.setItem('lst-name',n)}catch(x){}memName=n;inp.value=n;
+    if(code)guestStart(code);
+  });
   $('n-ask').onclick=function(){NET.denied=false;nmsg('Nouvelle demande envoyée au master…');nui();gconnect()};
   function bpm(d){setKnob('tempo',(bpmOf(P.tempo)+d-60)/140)}
   /* − et + : un appui change d'un BPM, un appui maintenu défile */
@@ -2946,7 +2983,7 @@ function njoin(){
   if(!CODE_RE.test(c)){nmsg('Le code fait 5 caractères (lettres et chiffres).');return}
   try{history.replaceState(null,'',location.pathname+location.search+'#'+c)}catch(e){}
   nmsg('Vérification de la version…');
-  updCheck(function(newer,b){if(newer&&!updTried(b)){updGo(b);return}guestStart(c)});
+  updCheck(function(newer,b){if(newer&&!updTried(b)){updGo(b);return}guestJoin(c)});
 }
 $('n-join').onclick=njoin;
 $('n-code').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();njoin()}});
@@ -3025,7 +3062,7 @@ function netBoot(){
   updCheck(function(newer,b){
     if(newer&&!updTried(b)&&(want||!NET.touched)){updGo(b);return} /* au lancement, avant que tu aies commencé à jouer */
     if(newer){NET.upd=b;nver()}
-    if(want==='host')hostStart(saved);else if(want==='guest')guestStart(h);
+    if(want==='host')hostStart(saved);else if(want==='guest')guestJoin(h);
   });
 }
 
