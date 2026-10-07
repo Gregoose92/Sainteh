@@ -150,6 +150,24 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .keys.live .key{height:72px}
 .keys.live .key.bk{height:54px}
 .key.down{box-shadow:inset 0 -9px 0 var(--led)}
+/* clavier live en plein écran : il recouvre tout, les touches prennent toute la hauteur */
+.livebox .kfs-only{display:none}
+.livebox>.edrow .sp{margin-left:auto}
+.livebox.fs{position:fixed;inset:0;z-index:60;margin:0;gap:10px;overflow:hidden;overscroll-behavior:none;background:var(--zbg,var(--panel));
+  padding:calc(10px + env(safe-area-inset-top,0px)) calc(10px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(10px + env(safe-area-inset-left,0px))}
+.livebox.fs .kfs-only{display:inline-block}
+.livebox.fs .hint{display:none}
+.livebox.fs .keys.live{flex:1 1 0;min-height:0;gap:4px;grid-template-rows:minmax(0,1fr);align-items:start}
+.livebox.fs .keys.live .key{height:100%;font-size:15px;padding-bottom:14px;border-radius:6px}
+.livebox.fs .keys.live .key.bk{height:62%}
+.livebox.fs .key.down{box-shadow:inset 0 -16px 0 var(--led)}
+/* téléphone tenu debout : les touches deviennent des barres empilées, grave en bas, bien plus larges sous le doigt */
+@media (orientation:portrait) and (max-width:600px){
+  .livebox.fs .keys.live{display:flex;flex-direction:column-reverse;align-items:stretch}
+  .livebox.fs .keys.live .key{flex:1 1 0;min-height:0;height:auto;width:100%;align-items:center;justify-content:flex-start;padding:0 0 0 14px}
+  .livebox.fs .keys.live .key.bk{height:auto;width:62%}
+  .livebox.fs .key.down{box-shadow:inset 16px 0 0 var(--led)}
+}
 .lpads{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .lpad{min-height:52px;padding:8px 4px;text-align:center;min-width:0}
 .lpad[data-empty]{opacity:.5}
@@ -478,7 +496,7 @@ html.fsl,html.fsl body{overflow:hidden}
     </div>
     <div class="keys" id="keys"></div>
   </div>
-  <div class="editor">
+  <div class="editor livebox" id="live-b">
       <div class="edrow">
         <span class="lbl">Clavier live</span>
         <div class="seg" role="group" aria-label="Octave du clavier live de la basse">
@@ -487,6 +505,8 @@ html.fsl,html.fsl body{overflow:hidden}
         </div>
         <span class="lbl" id="lb-ol">Octave 0</span>
         <button class="btn" id="lb-acc" aria-pressed="false">Accent</button>
+        <button class="btn run kfs-only" id="lb-play" aria-pressed="false">▶ Lecture</button>
+        <button class="btn sp" id="lb-fs" aria-pressed="false">Plein écran</button>
       </div>
       <div class="keys live" id="lkeys-b"></div>
       <p class="hint" id="lat-b" role="status"></p>
@@ -602,7 +622,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
       <div class="keys" id="ykeys"></div>
     </div>
-    <div class="editor">
+    <div class="editor livebox" id="live-y">
       <div class="edrow">
         <span class="lbl">Clavier live</span>
         <div class="seg" role="group" aria-label="Octave du clavier live du synthé">
@@ -611,6 +631,8 @@ html.fsl,html.fsl body{overflow:hidden}
         </div>
         <span class="lbl" id="ly-ol">Octave 0</span>
         <button class="btn" id="ly-acc" aria-pressed="false">Accent</button>
+        <button class="btn run kfs-only" id="ly-play" aria-pressed="false">▶ Lecture</button>
+        <button class="btn sp" id="ly-fs" aria-pressed="false">Plein écran</button>
       </div>
       <div class="keys live" id="lkeys-y"></div>
       <p class="hint" id="lat-y" role="status"></p>
@@ -1133,7 +1155,7 @@ function audition(st,remote){
   if(NET.role==='guest'){netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0});return}
   initAudio();if(!ctx)return;inMaster(go);
 }
-function setPlayUI(){['play','cfs-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
+function setPlayUI(){['play','cfs-play','lb-play','ly-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
 
 /* ---------- potards ---------- */
 var knobEls={};
@@ -1990,7 +2012,32 @@ function cfsSet(on){
   }
   cfsLayout();if(!CFS)window.scrollTo(0,cfsY);try{$(CFS?'cfs-x':'c-fs').focus({preventScroll:true})}catch(e){}
 }
-$('c-fs').onclick=function(){cfsSet(true)};
+$('c-fs').onclick=function(){kfsSet('');cfsSet(true)};
+/* Plein écran d'un clavier live (basse ou synthé) : même principe que pour les congas. */
+var KFS='',kfsLock=null,kfsY=0;
+function kfsSet(g){
+  g=g==='b'||g==='y'?g:'';if(g===KFS)return;
+  var p;if(g&&CFS)cfsSet(false);
+  if(g&&!KFS)kfsY=window.scrollY; /* le bloc sort du flux : on retiendra où en était la page */
+  if(KFS){liveOff(KFS,'me')} /* aucune note ne doit rester tenue en changeant d'affichage */
+  KFS=g;
+  ['b','y'].forEach(function(x){var on=x===g,b=$('l'+x+'-fs');$('live-'+x).classList.toggle('fs',on);b.textContent=on?'✕ Quitter':'Plein écran';b.setAttribute('aria-pressed',on?'true':'false')});
+  document.documentElement.classList.toggle('fsl',!!g||CFS);
+  if(g){
+    var el=$('live-'+g);
+    try{var rq=el.requestFullscreen||el.webkitRequestFullscreen;if(rq){p=rq.call(el);if(p&&p.catch)p.catch(function(){})}}catch(e){}
+    try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){kfsLock=l},function(){})}catch(e){}
+  }else{
+    try{if(document.fullscreenElement||document.webkitFullscreenElement){var ex=document.exitFullscreen||document.webkitExitFullscreen;p=ex.call(document);if(p&&p.catch)p.catch(function(){})}}catch(e){}
+    try{if(kfsLock){kfsLock.release();kfsLock=null}}catch(e){}
+    window.scrollTo(0,kfsY);
+  }
+}
+['b','y'].forEach(function(g){
+  $('l'+g+'-fs').onclick=function(){kfsSet(KFS===g?'':g)};
+  $('l'+g+'-play').onclick=function(){playing?stop():start()};
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&KFS)kfsSet('')});
 $('cfs-x').onclick=function(){cfsSet(false)};
 $('cfs-play').onclick=function(){playing?stop():start()};
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&CFS)cfsSet(false)});
@@ -2048,7 +2095,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=35; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=36; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2513,7 +2560,7 @@ function reqBar(){
   bar.hidden=!n||accVisible();
 }
 $('reqbar-go').onclick=function(){
-  if(CFS)cfsSet(false);
+  if(CFS)cfsSet(false);kfsSet('');
   Z.m=true;renderZ();$('acc').scrollIntoView({block:'start'});reqBar();
 };
 (function(){var w=0;function chk(){if(w||!REQ.length)return;w=requestAnimationFrame(function(){w=0;reqBar()})}
@@ -2553,11 +2600,12 @@ function permUI(){
     var lock=!can(g);
     if(lock&&CUE[g])cueOff(g);
     if(lock&&g==='c'&&CFS)cfsSet(false);
+    if(lock&&KFS===g)kfsSet('');
     document.querySelector('.'+ZK[g]).classList.toggle('lock',lock);$('zv-'+g).disabled=lock;
     $('lk-'+g+'-ask').hidden=off;
     $('lk-'+g+'-t').textContent=NET.denied?'Tu n\'es plus dans la session':!(hconn&&hconn.open)?'Connexion au master…':NET.wait?'En attente de la réponse du master':(lockNote[g]||'Le master ne t\'a pas ouvert cet instrument');
   });
-  var t=!can('t');$('play').disabled=t;$('rew').disabled=t;$('fill').disabled=!can('d');
+  var t=!can('t');$('play').disabled=t;$('rew').disabled=t;$('lb-play').disabled=t;$('ly-play').disabled=t;$('fill').disabled=!can('d');
   knobEls.tempo.kn.parentNode.classList.toggle('klock',t);knobEls.tempo.kn.tabIndex=t?-1:0;
   $('bpm-btn').disabled=t;if(t)bpmEd(false);
 }
