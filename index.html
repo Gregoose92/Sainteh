@@ -130,7 +130,7 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .field input[type=range]{width:100%;accent-color:var(--led)}
 .actions{display:flex;flex-wrap:wrap;gap:8px}
 .hint{font-size:13px;color:var(--ink-soft);margin:0}
-#toast{font-family:var(--f-mono);font-size:12px;color:var(--ink-soft);align-self:center}
+#toast,#y-toast{font-family:var(--f-mono);font-size:12px;color:var(--ink-soft);align-self:center}
 .drumtop{display:flex;flex-wrap:wrap;gap:14px}
 .strips{flex:1 1 340px;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;background:var(--panel-2);border-radius:8px;padding:10px 6px}
 .dk{flex:1 1 260px}
@@ -615,15 +615,44 @@ html.fsl,html.fsl body{overflow:hidden}
       <div class="keys live" id="lkeys-y"></div>
       <p class="hint" id="lat-y" role="status"></p>
     </div>
-    <div class="actions">
-      <select class="sel" id="y-style" aria-label="Style de pattern du synthé">
-        <option value="arp">Arpège</option><option value="mel">Mélodie</option><option value="stab">Stabs</option>
-      </select>
-      <button class="btn primary" id="y-gen">Générer le synthé</button>
-      <button class="btn" id="y-l">◀ Décaler</button>
-      <button class="btn" id="y-r">Décaler ▶</button>
-      <button class="btn" id="y-clr">Effacer</button>
-    </div>
+    <section class="gen">
+      <h2>GÉNÉRATEUR DE SYNTHÉ</h2>
+      <div class="gengrid">
+        <div class="field"><label class="lbl" for="y-style">Style</label>
+          <select id="y-style">
+            <option value="arp">Arpège</option><option value="mel">Mélodie</option><option value="stab">Stabs</option>
+          </select></div>
+        <div class="field"><label class="lbl" for="ys-root">Tonique</label>
+          <select id="ys-root"><option value="-1">Comme la basse</option></select></div>
+        <div class="field"><label class="lbl" for="ys-scale">Gamme</label>
+          <select id="ys-scale">
+            <option value="">Comme la basse</option>
+            <option value="min">Mineur naturel</option>
+            <option value="phr">Phrygien</option>
+            <option value="pmin">Pentatonique mineure</option>
+            <option value="blues">Blues</option>
+            <option value="dor">Dorien</option>
+            <option value="maj">Majeur</option>
+            <option value="chr">Chromatique</option>
+          </select></div>
+        <div class="field"><label class="lbl" for="ys-dens"><span>Densité</span><output id="ys-dens-o"></output></label>
+          <input type="range" id="ys-dens" min="20" max="100" value="85"></div>
+        <div class="field"><label class="lbl" for="ys-acc"><span>Accents</span><output id="ys-acc-o"></output></label>
+          <input type="range" id="ys-acc" min="0" max="80" value="30"></div>
+        <div class="field"><label class="lbl" for="ys-tie"><span>Liaisons</span><output id="ys-tie-o"></output></label>
+          <input type="range" id="ys-tie" min="0" max="60" value="15"></div>
+        <div class="field"><label class="lbl" for="ys-oct"><span>Sauts d'octave</span><output id="ys-oct-o"></output></label>
+          <input type="range" id="ys-oct" min="0" max="70" value="10"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="y-gen">Générer</button>
+        <button class="btn" id="y-mut">Muter 3 pas</button>
+        <button class="btn" id="y-l">◀ Décaler</button>
+        <button class="btn" id="y-r">Décaler ▶</button>
+        <button class="btn" id="y-clr">Effacer</button>
+        <span id="y-toast" role="status"></span>
+      </div>
+    </section>
   </section>
 
   <section class="zone zl">
@@ -873,7 +902,7 @@ function relTau(v){return .005+v*v*.4}    /* constante de temps de la retombée 
 try{var sv=JSON.parse(localStorage.getItem('acidline16')||'null');
   if(sv&&Array.isArray(sv.pat)&&(sv.pat.length===16||sv.pat.length===32)){pat=sv.pat;if(sv.BL===16||sv.BL===32)BL=sv.BL;
     if(sv.P)for(var k in P)if(typeof sv.P[k]==='number')P[k]=sv.P[k];
-    if(sv.wave)wave=sv.wave;if(sv.D&&sv.D.pat&&sv.D.pat.A&&sv.D.pat.A.length===8&&sv.D.pat.B&&sv.D.pat.B.length===8&&sv.D.lv)D=sv.D;if(sv.Y&&Array.isArray(sv.Y.pat)&&sv.Y.pat.length===32)Y=sv.Y;if(sv.L&&Array.isArray(sv.L.slots)&&sv.L.slots.length>=3)L=sv.L;if(sv.B&&sv.B.ftype&&sv.B.lfoT)B=sv.B; var savedGen=sv.gen;}
+    if(sv.wave)wave=sv.wave;if(sv.D&&sv.D.pat&&sv.D.pat.A&&sv.D.pat.A.length===8&&sv.D.pat.B&&sv.D.pat.B.length===8&&sv.D.lv)D=sv.D;if(sv.Y&&Array.isArray(sv.Y.pat)&&sv.Y.pat.length===32)Y=sv.Y;if(sv.L&&Array.isArray(sv.L.slots)&&sv.L.slots.length>=3)L=sv.L;if(sv.B&&sv.B.ftype&&sv.B.lfoT)B=sv.B; var savedGen=sv.gen,savedYGen=sv.ygen;}
 }catch(e){}
 while(pat.length<32)pat.push(JSON.parse(JSON.stringify(pat[pat.length-16])));
 L.slots=L.slots.slice(0,LN);while(L.slots.length<LN)L.slots.push(lslot());if(!(L.sel>=0&&L.sel<LN))L.sel=0; /* une sauvegarde d'avant n'avait que trois boucles */
@@ -882,7 +911,7 @@ if(!Array.isArray(D.inst)||D.inst.length!==8||D.inst.some(function(i){return !IN
 if(!Y.ftype)Y.ftype='lowpass';if(!Y.lfoT)Y.lfoT='cut';if(!Y.chord)Y.chord='off';if(Y.preset===undefined)Y.preset='';
 var saveT=0;
 function saveNow(){clearTimeout(saveT);saveT=0;if(NET.role==='guest')return; /* on enregistre l'état du master, jamais un cue en préparation */
-  inMaster(function(){try{localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),D:D,Y:Y,L:L,B:B}))}catch(e){}})}
+  inMaster(function(){try{localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),ygen:ygenState(),D:D,Y:Y,L:L,B:B}))}catch(e){}})}
 var cueUT=0;
 function save(){netSync();padKick();if(cueAny()){clearTimeout(cueUT);cueUT=setTimeout(cueUI,80)}if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(saveNow,400)}
 
@@ -1549,23 +1578,51 @@ $('y-sq').onclick=function(){Y.wave='square';applyParams();ychanged()};
 $('y-l').onclick=function(){var a=Y.pat.splice(0,Y.len);a.push(a.shift());Y.pat=a.concat(Y.pat);ychanged()};
 $('y-r').onclick=function(){var a=Y.pat.splice(0,Y.len);a.unshift(a.pop());Y.pat=a.concat(Y.pat);ychanged()};
 $('y-clr').onclick=function(){Y.pat.forEach(function(s){s.g=0;s.a=false;s.o=0});ychanged()};
+/* Générateur du synthé : mêmes réglages que celui de la basse, plus un style. Tonique et gamme suivent la basse tant qu'on n'en choisit pas d'autres. */
+NOTE.slice(0,12).forEach(function(n,i){var o=document.createElement('option');o.value=i;o.textContent=n;$('ys-root').appendChild(o)});
+function ygenState(){return {style:$('y-style').value,root:+$('ys-root').value,scale:$('ys-scale').value,dens:+$('ys-dens').value,acc:+$('ys-acc').value,tie:+$('ys-tie').value,oct:+$('ys-oct').value}}
+if(typeof savedYGen==='object'&&savedYGen){[['style','y-style'],['root','ys-root'],['scale','ys-scale'],['dens','ys-dens'],['acc','ys-acc'],['tie','ys-tie'],['oct','ys-oct']].forEach(function(o){if(savedYGen[o[0]]!=null)$(o[1]).value=savedYGen[o[0]]});
+  if(!$('y-style').value)$('y-style').value='arp';if($('ys-root').selectedIndex<0)$('ys-root').value='-1';if($('ys-scale').selectedIndex<0)$('ys-scale').value=''}
+['dens','acc','tie','oct'].forEach(function(k){var el=$('ys-'+k),o=$('ys-'+k+'-o');function u(){o.textContent=el.value+' %'}el.addEventListener('input',function(){u();save()});u()});
+$('y-style').onchange=$('ys-root').onchange=$('ys-scale').onchange=save;
+var ytoastT;function ytoast(m){$('y-toast').textContent=m;clearTimeout(ytoastT);ytoastT=setTimeout(function(){$('y-toast').textContent=''},3500)}
+function ygenCtx(){
+  var g=ygenState(),b=genState();
+  g.root=g.root>=0&&g.root<12?g.root:b.root;g.sc=SCALES[g.scale]||SCALES[b.scale]||SCALES.min;return g;
+}
+function ymk(semi,acc){semi=Math.max(-12,Math.min(24,semi));var o=Math.floor(semi/12),n=semi-12*o;if(o>1){o=1;n=12}return S(1,n,o,acc,0)}
+function ydeg(g,k){var n=g.sc.length;return g.root+g.sc[((k%n)+n)%n]+12*Math.floor(k/n)}
+function yrest(g){return S(0,g.root,0,0,0)}
+function yoct(g,semi){var r=Math.random;return r()*100<g.oct?semi+(r()<.7?12:-12):semi}
+function yacc(g,strong){return Math.random()*100<(strong?Math.min(100,g.acc*2.4):g.acc*.5)} /* les temps forts sont accentués plus souvent */
+/* Une mesure de seize pas dans le style choisi. */
+function ybar(g){
+  var a=[],i,k,r=Math.random,d=g.dens/100;
+  if(g.style==='arp'){var ch=[0,2,4,7],ord=r()<.4?[0,1,2,3]:(r()<.5?[0,1,2,3,2,1]:[0,2,1,3,2,1]),c=0;
+    for(i=0;i<16;i++)a.push(i===0||r()<d?ymk(yoct(g,ydeg(g,ch[ord[c++%ord.length]])),yacc(g,i%4===0)):yrest(g))}
+  else if(g.style==='mel'){k=2;var mv=[-2,-1,-1,0,1,1,2];
+    for(i=0;i<16;i++){if(i===0||r()<d){k=Math.max(0,Math.min(9,k+mv[Math.floor(r()*mv.length)]));a.push(ymk(yoct(g,ydeg(g,k)),yacc(g,i%4===0)))}else a.push(yrest(g))}}
+  else{for(i=0;i<16;i++)a.push(yrest(g));var d0=r()<.5?0:4;
+    [0,3,6,10,12,14].forEach(function(p){if(p===0||r()<d)a[p]=ymk(yoct(g,ydeg(g,r()<.7?d0:d0+2)),yacc(g,true))})}
+  return a;
+}
+/* Liaisons : un silence qui suit une note devient, selon le réglage, la prolongation de cette note. */
+function yties(g,st,len,only){
+  for(var i=1;i<len;i++){if(only&&only.indexOf(i)<0&&only.indexOf(i-1)<0)continue;
+    var x=st[i],pv=st[i-1];
+    if(x.g===2&&pv.g===0)x.g=0;
+    else if(x.g===0&&pv.g!==0&&(!only||only.indexOf(i)>=0)&&Math.random()*100<g.tie){x.g=2;x.n=pv.n;x.o=pv.o}}
+  if(st[0].g===2)st[0].g=0;
+}
 $('y-gen').onclick=function(){
-  var g=genState(),sc=SCALES[g.scale],style=$('y-style').value,r=Math.random;
-  function mk(semi,acc){semi=Math.max(-12,Math.min(24,semi));var o=Math.floor(semi/12),n=semi-12*o;if(o>1){o=1;n=12}return S(1,n,o,acc,0)}
-  function deg(k){var n=sc.length;return g.root+sc[((k%n)+n)%n]+12*Math.floor(k/n)}
-  function rest(){return S(0,g.root,0,0,0)}
-  function bar(){var a=[],i,k;
-    if(style==='arp'){var ch=[0,2,4,7],ord=r()<.4?[0,1,2,3]:(r()<.5?[0,1,2,3,2,1]:[0,2,1,3,2,1]),c=0;
-      for(i=0;i<16;i++)a.push(r()<.85?mk(deg(ch[ord[c++%ord.length]]),i%4===0):rest())}
-    else if(style==='mel'){k=2;var mv=[-2,-1,-1,0,1,1,2];
-      for(i=0;i<16;i++){var x=r();
-        if(i===0||x<.62){k=Math.max(0,Math.min(9,k+mv[Math.floor(r()*mv.length)]));a.push(mk(deg(k),r()<.25))}
-        else if(x<.8&&a[i-1].g!==0){var tie=rest();tie.g=2;a.push(tie)}else a.push(rest())}}
-    else{for(i=0;i<16;i++)a.push(rest());var d0=r()<.5?0:4;
-      [0,3,6,10,12,14].forEach(function(p){if(p===0||r()<.6){a[p]=mk(deg(r()<.7?d0:d0+2),true);if(r()<.3){a[p+1].g=2}}})}
-    return a}
-  var b1=bar(),b2=style==='mel'?bar():JSON.parse(JSON.stringify(b1));
-  Y.pat=b1.concat(b2);ychanged();toast('Synthé généré en '+NOTE[g.root]+'.');
+  var g=ygenCtx(),b1=ybar(g),b2=g.style==='mel'?ybar(g):JSON.parse(JSON.stringify(b1));
+  yties(g,b1,16);if(g.style==='mel')yties(g,b2,16);else b2=JSON.parse(JSON.stringify(b1));
+  Y.pat=b1.concat(b2);ychanged();ytoast('Synthé généré en '+NOTE[g.root]+'.');
+};
+$('y-mut').onclick=function(){
+  var g=ygenCtx(),ids=[],r=Math.random;while(ids.length<3){var x=Math.floor(r()*Y.len);if(ids.indexOf(x)<0)ids.push(x)}
+  ids.forEach(function(i){Y.pat[i]=r()*100<g.dens?ymk(yoct(g,ydeg(g,Math.floor(r()*8))),yacc(g,i%4===0)):yrest(g)});
+  yties(g,Y.pat,Y.len,ids);ychanged();ytoast('Pas modifiés : '+ids.map(function(i){return i+1}).sort(function(a,b){return a-b}).join(', ')+'.');
 };
 
 /* ---------- basse : options et presets ---------- */
@@ -1991,7 +2048,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=34; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=35; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
