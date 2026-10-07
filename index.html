@@ -818,6 +818,7 @@ var KN=[
 /* Groupes d'accès (profils master / invités) : b basse, y synthé, l looper, c congas, d rythmes, t lecture et tempo. */
 var PGN={b:'Basse',y:'Synthé',l:'Looper',c:'Congas',d:'Rythmes',t:'Lecture & tempo'},PGS='bylcdt',SECG={pat:'b',B:'b',Y:'y',D:'d',L:'l',M:'x'},PG={};
 var OFFG={b:false,y:false,d:false}; /* instruments en mute sur le master (pad désactivé) : rien d'autre n'est modifié */
+var OFFQ={b:false,y:false,d:false},offAt={b:0,y:0,d:0}; /* réactivation en attente du début de la mesure, et instant où elle prend effet */
 KN.forEach(function(k){var bx=k.box||'knobs';PG[k.id]=k.id==='tempo'?'t':bx==='knobs'?'b':bx==='yknobs'?'y':bx==='lknobs'?'l':bx==='cknobs'?'c':'d'});
 function can(g){return NET.role!=='guest'||NET.pm==null||NET.pm.indexOf(g)>=0} /* le master et le mode solo peuvent tout */
 var YINT=[-12,-7,-5,0,5,7,12];
@@ -1019,7 +1020,12 @@ function apply0(){
   pre.gain.setTargetAtTime(1+P.drive*18,t,.02);if(lastD!==P.drive){lastD=P.drive;shaper.curve=curve(1+P.drive*3)}
   post.gain.setTargetAtTime(1/(1+P.drive*1.2),t,.02);
   var mu=W?{}:OFFG; /* instruments en mute : niveau à zéro sur le master, sans toucher à aucun réglage */
-  master.gain.setTargetAtTime(mu.b?0:P.vol*.7,t,.02);
+  function lvl(prm,g,v){
+    if(mu[g]){prm.cancelScheduledValues(t);prm.setTargetAtTime(0,t,.02)}
+    else if(!W&&offAt[g]-.004>t)prm.setTargetAtTime(v,offAt[g]-.004,.001); /* ouvert pile pour le premier temps */
+    else prm.setTargetAtTime(v,t,.02);
+  }
+  lvl(master.gain,'b',P.vol*.7);
   f1.type=f2.type=B.ftype;bsubg.gain.setTargetAtTime(P.bsub*.9,t,.02);blfo.frequency.setTargetAtTime(ylfoHz(P.blfor),t,.02);
   blfoF.gain.setTargetAtTime(B.lfoT==='cut'?P.blfod*2400:0,t,.02);blfoP.gain.setTargetAtTime(B.lfoT==='pitch'?P.blfod*60:0,t,.02);
   bsd.gain.setTargetAtTime(P.bdly*.6,t,.02);bsr.gain.setTargetAtTime(P.brev*.7,t,.02);
@@ -1031,8 +1037,8 @@ function apply0(){
   ylfo.frequency.setTargetAtTime(ylfoHz(P.ylfor),t,.02);ylfoF.gain.setTargetAtTime(Y.lfoT==='cut'?P.ylfod*2400:0,t,.02);ylfoP.gain.setTargetAtTime(Y.lfoT==='pitch'?P.ylfod*60:0,t,.02);
   ypre.gain.setTargetAtTime(1+P.ydrv*12,t,.02);if(lastY!==P.ydrv){lastY=P.ydrv;yshp.curve=curve(1+P.ydrv*3)}
   if(!playing)yf.frequency.setTargetAtTime(ycutHz(P.ycut),t,.02);
-  yf.Q.setTargetAtTime(P.yres*18,t,.02);ygain.gain.setTargetAtTime(mu.y?0:P.yvol*.6/(1+P.ydrv*.8),t,.02);ysd.gain.setTargetAtTime(P.ydly*.6,t,.02);ysr.gain.setTargetAtTime(P.yrev*.7,t,.02);
-  drumBus.gain.setTargetAtTime(mu.d?0:P.dvol,t,.02);kickBus.gain.setTargetAtTime(mu.d?0:P.dvol*1.5,t,.02);if(lastK!==P.kdrive){lastK=P.kdrive;kshaper.curve=curve(1+P.kdrive*28)}dsend.gain.setTargetAtTime(P.dly*.6,t,.02);rsend.gain.setTargetAtTime(P.rev*.7,t,.02);
+  yf.Q.setTargetAtTime(P.yres*18,t,.02);lvl(ygain.gain,'y',P.yvol*.6/(1+P.ydrv*.8));ysd.gain.setTargetAtTime(P.ydly*.6,t,.02);ysr.gain.setTargetAtTime(P.yrev*.7,t,.02);
+  lvl(drumBus.gain,'d',P.dvol);lvl(kickBus.gain,'d',P.dvol*1.5);if(lastK!==P.kdrive){lastK=P.kdrive;kshaper.curve=curve(1+P.kdrive*28)}dsend.gain.setTargetAtTime(P.dly*.6,t,.02);rsend.gain.setTargetAtTime(P.rev*.7,t,.02);
   dly.delayTime.setTargetAtTime(Math.min(1.9,3*60/bpmOf(P.tempo)/4),t,.05);
 }
 function freq(st){return 65.406*Math.pow(2,(st.n+12*st.o+tuneOf(P.tune))/12)}
@@ -1974,7 +1980,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=32; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=33; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2008,8 +2014,8 @@ var SEC={
       L.slots=LK.map(function(i){var s=d.slots[i]||{};return {vol:num(s.vol,.8),start:num(s.start,0),rate:num(s.rate,.5),mute:!!s.mute,rev:!!s.rev,loop:s.loop!==false}});
       var s=L.slots[L.sel];P.lvol=s.vol;P.lstart=s.start;P.lrate=s.rate},
     draw:function(){['lvol','lstart','lrate'].forEach(drawKnob);renderL()}},
-  M:{get:function(){return {b:OFFG.b,y:OFFG.y,d:OFFG.d}}, /* seul le master l'émet ; un invité passe par un message dédié */
-    set:function(d){PADG.forEach(function(g){OFFG[g]=!!d[g]})},
+  M:{get:function(){return {b:OFFG.b,y:OFFG.y,d:OFFG.d,q:(OFFQ.b?'b':'')+(OFFQ.y?'y':'')+(OFFQ.d?'d':'')}}, /* seul le master l'émet ; un invité passe par un message dédié */
+    set:function(d){var q=String(d.q||'');PADG.forEach(function(g){OFFG[g]=!!d[g];OFFQ[g]=OFFG[g]&&q.indexOf(g)>=0})},
     draw:function(){applyParams();offUI()}}
 };
 function snap(){inMaster(function(){for(var k in SEC)lastS[k]=JSON.stringify(SEC[k].get());for(var id in P)lastP[id]=P[id]})}
@@ -2303,7 +2309,7 @@ function cueTake(g,m,pad){
   if(CUE[g]&&M){for(k in m.s)M.s[k]=JSON.stringify(m.s[k]);for(k in m.p)M.p[k]=m.p[k];M.alt=null;applyParams()}
   else netApply(m); /* le cue a été quitté entre-temps : l'envoi s'applique quand même */
   if(NET.role==='host')netSend({t:'st',s:m.s,p:m.p});
-  if(pad)setOff(g,false);
+  if(pad&&OFFG[g]){qst=qst.filter(function(x){return x.off!==g});offNow(g,playing?nextTime:0)} /* lancer un pad réactive l'instrument, au moment où la séquence entre */
   save();PADQ[g]=-1;if(!pad){cueNote[g]='En place sur le master';cueClear(g,3500)}cueUI();padUI();
 }
 function cueSend(g){
@@ -2357,7 +2363,7 @@ function cueUI(){
 /* côté hôte : les cues reçus pendant la lecture attendent le début de la mesure suivante */
 function netQueued(){
   if(!qst.length)return;var q=qst;qst=[];
-  q.forEach(function(x){try{if(x.local){cueTake(x.local,x.m,x.pad);return}netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
+  q.forEach(function(x){try{if(x.off){if(OFFQ[x.off])offNow(x.off,playing?nextTime:0);return}if(x.local){cueTake(x.local,x.m,x.pad);return}netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
 }
 
 /* ----- profils : un master, des invités -----
@@ -2543,9 +2549,16 @@ function padLaunch(g,i,seq){
 }
 /* Mute ou réactive un instrument sur le master : seul son niveau de sortie change. */
 function setOff(g,v){
-  v=!!v;if(OFFG[g]===v)return;OFFG[g]=v;
-  applyParams();offUI();save();
+  if(v){ /* mute : tout de suite, et il annule une réactivation en attente */
+    qst=qst.filter(function(x){return x.off!==g});
+    var was=OFFG[g]&&!OFFQ[g];OFFQ[g]=false;OFFG[g]=true;offAt[g]=0;if(was)return;
+    applyParams();offUI();save();return;
+  }
+  if(!OFFG[g])return;
+  if(playing){if(!OFFQ[g]){OFFQ[g]=true;qst.push({off:g});offUI();save()}return} /* réactivation : au début de la mesure suivante */
+  offNow(g,0);
 }
+function offNow(g,t){OFFQ[g]=false;OFFG[g]=false;offAt[g]=t||0;applyParams();offUI();save()}
 function offTap(g,v){if(!can(g))return;if(NET.role==='guest')netSend({t:'ko',g:g,v:v?1:0});else setOff(g,v)}
 function offUI(){PADG.forEach(function(g){document.querySelector('.'+ZK[g]).classList.toggle('off',OFFG[g]);var l=$('kl-'+g);l.classList.toggle('off',OFFG[g]);l.setAttribute('aria-pressed',OFFG[g]?'false':'true')});padUI()}
 function lstop(k){lact.slice().forEach(function(x){if(x._k===k){try{x.stop()}catch(e){}}})}
@@ -2556,7 +2569,7 @@ function padTap(g,i){
   if(padArm==='del'){padArm='';if(d){if(guest)netSend({t:'ks',g:g,k:i,d:null});else padSet(g,i,null);kmsg(name+' effacé')}padUI();return}
   if(padArm==='rec'||!d){padArm='';var nd=padSnap(g);if(guest)netSend({t:'ks',g:g,k:i,d:nd});else padSet(g,i,nd);kmsg(name+' enregistré');padUI();return}
   var same=false;try{same=padSlotKey(g,d)===padCur(g)}catch(e){}
-  if(same){var mv=!OFFG[g];offTap(g,mv);kmsg(PGN[g]+(mv?' : mute':' : réactivé'));padUI();return} /* le pad en place sert de mute : rien n'est rappelé ni modifié */
+  if(same){var mv=!OFFG[g]||OFFQ[g];offTap(g,mv);kmsg(PGN[g]+(mv?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'));padUI();return} /* le pad en place sert de mute : rien n'est rappelé ni modifié */
   if(guest){netSend({t:'kl',g:g,k:i,o:PMODE==='seq'?1:0});padPend(g,i)}else padLaunch(g,i,PMODE==='seq');
   kmsg(playing?name+' : à la prochaine mesure':name+' lancé');padUI();
 }
@@ -2588,9 +2601,10 @@ function padUI(){
     var ok=can(g)&&!(NET.role==='guest'&&(NET.wait||NET.denied));$('kl-'+g).disabled=!ok;
     for(var i=0;i<PADN;i++){
       var b=$('kp-'+g+'-'+i),d=PADS[g][i],act=false;
-      if(d)try{act=!OFFG[g]&&padSlotKey(g,d)===cur}catch(e){}
+      var same=false;if(d)try{same=padSlotKey(g,d)===cur}catch(e){}
+      act=same&&!OFFG[g];
       if(act&&PADQ[g]===i)PADQ[g]=-1;
-      b.disabled=!ok;b.className='kpad'+(d?'':' empty')+(act?' act':'')+(PADQ[g]===i&&!act?' pend':'');
+      b.disabled=!ok;b.className='kpad'+(d?'':' empty')+(act?' act':'')+((PADQ[g]===i&&!act)||(same&&OFFQ[g])?' pend':'');
       b.setAttribute('aria-pressed',act?'true':'false');
       b.setAttribute('aria-label',PGN[g]+' '+(i+1)+(d?(act?', en place':', enregistré'):', vide'));
       if(b._d!==d){b._d=d;while(b.lastChild&&b.lastChild!==b.firstChild)b.removeChild(b.lastChild);if(d)try{b.appendChild(padSvg(g,d))}catch(e){}}
@@ -2616,7 +2630,7 @@ function loopSvg(pk){
   var grid=$('kgrid');
   PADG.forEach(function(g){
     var l=mk('button','klab',PGN[g]);l.type='button';l.id='kl-'+g;l.setAttribute('data-g',g);l.setAttribute('aria-pressed','true');l.title='Mute';grid.appendChild(l);
-    l.onclick=function(){var v=!OFFG[g];offTap(g,v);kmsg(PGN[g]+(v?' : mute':' : réactivé'))};
+    l.onclick=function(){var v=!OFFG[g]||OFFQ[g];offTap(g,v);kmsg(PGN[g]+(v?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'))};
     for(var i=0;i<PADN;i++)(function(i){var b=mk('button','kpad empty');b.type='button';b.id='kp-'+g+'-'+i;b.setAttribute('data-g',g);b.appendChild(mk('span','kn',i+1));b.onclick=function(){padTap(g,i)};grid.appendChild(b)})(i);
   });
   var ll=mk('div','klab','Boucles');ll.setAttribute('data-g','l');grid.appendChild(ll);
