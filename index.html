@@ -1016,7 +1016,7 @@ function apply0(){
   f1.type=f2.type=B.ftype;bsubg.gain.setTargetAtTime(P.bsub*.9,t,.02);blfo.frequency.setTargetAtTime(ylfoHz(P.blfor),t,.02);
   blfoF.gain.setTargetAtTime(B.lfoT==='cut'?P.blfod*2400:0,t,.02);blfoP.gain.setTargetAtTime(B.lfoT==='pitch'?P.blfod*60:0,t,.02);
   bsd.gain.setTargetAtTime(P.bdly*.6,t,.02);bsr.gain.setTargetAtTime(P.brev*.7,t,.02);
-  lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(P.lmast*1.25,t,.02);cbus.gain.setTargetAtTime(P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
+  lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(P.lmast*1.6,t,.02);cbus.gain.setTargetAtTime(P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
   yA.type=yB.type=yC.type=yD.type=Y.wave;yf.type=Y.ftype;
   yA.detune.setTargetAtTime(-P.ydet*25,t,.02);yB.detune.setTargetAtTime(P.ydet*25,t,.02);yC.detune.setTargetAtTime(-P.ydet*12,t,.02);yD.detune.setTargetAtTime(P.ydet*12,t,.02);
   var chOn=Y.chord!=='off';ymx.gain.setTargetAtTime(chOn?.32:.5,t,.02);ychg.gain.setTargetAtTime(chOn?.8:0,t,.02);
@@ -1628,7 +1628,7 @@ function renderYOpt(){
 var linfo=LK.map(function(){return null}); /* chez un invité : nom et durée des boucles chargées sur le master */
 function lhas(k){return !!(lbuf[k]||linfo[k])}
 function ldur(k){return lbuf[k]?lbuf[k].duration:(linfo[k]?linfo[k].dur:0)}
-var lbus,lsd,lsr,lg=[],lbuf=LK.map(function(){return null}),lrb=LK.map(function(){return null}),lpk=LK.map(function(){return null}),lname=LK.map(function(){return ''}),lact=[],lt0=LK.map(function(){return 0}),lrecorder=null;
+var lbus,lsd,lsr,lg=[],lbuf=LK.map(function(){return null}),lrb=LK.map(function(){return null}),lpk=LK.map(function(){return null}),lname=LK.map(function(){return ''}),lact=[],lt0=LK.map(function(){return 0}),lnorm=LK.map(function(){return 1}),lrecorder=null;
 function lplay(k,t,maxDur){
   var s=L.slots[k],b=lbuf[k];if(!b||!ctx)return;
   if(s.rev){
@@ -1637,8 +1637,9 @@ function lplay(k,t,maxDur){
     b=lrb[k]}
   var src=ctx.createBufferSource(),g=ctx.createGain();
   src.buffer=b;src.playbackRate.value=lrate(s.rate);src.connect(g);g.connect(lg[k]);
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(1,t+.005);
-  if(maxDur){g.gain.setValueAtTime(1,t+maxDur-.012);g.gain.linearRampToValueAtTime(0,t+maxDur-.002)}
+  var nv=lnorm[k]||1; /* gain de mise à niveau, calculé au chargement */
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(nv,t+.005);
+  if(maxDur){g.gain.setValueAtTime(nv,t+maxDur-.012);g.gain.linearRampToValueAtTime(0,t+maxDur-.002)}
   src.start(t,s.start*b.duration*.95);if(maxDur)src.stop(t+maxDur);src._k=k;lt0[k]=t;lact.push(src);
   src.onended=function(){try{g.disconnect()}catch(e){}var i=lact.indexOf(src);if(i>=0)lact.splice(i,1)};
 }
@@ -1647,6 +1648,9 @@ function lsched(c,b,t,d){if(c!==0||b%L.bars!==0)return;for(var k=0;k<LN;k++)if(l
 function lmsg(m){$('l-msg').textContent=m}
 function lset(k,buf,name){
   lbuf[k]=buf;lrb[k]=null;lname[k]=name;
+  /* mise à niveau : une prise de micro est souvent faible, on la remonte pour que sa crête arrive près du maximum (au plus ×12) */
+  var top=.0001;for(var c=0;c<buf.numberOfChannels;c++){var cd=buf.getChannelData(c);for(var q=0;q<cd.length;q++){var av=cd[q]<0?-cd[q]:cd[q];if(av>top)top=av}}
+  lnorm[k]=Math.min(12,.9/top);
   var N=240,ch=buf.getChannelData(0),bl=Math.max(1,Math.floor(ch.length/N)),pk=[],mx=.0001;
   for(var i=0;i<N;i++){var m=0;for(var j=i*bl,e=Math.min(ch.length,j+bl);j<e;j+=8){var v=Math.abs(ch[j]);if(v>m)m=v}pk.push(m);if(m>mx)mx=m}
   lpk[k]=pk.map(function(v){return v/mx});renderL();netLoop(k);
@@ -1706,7 +1710,7 @@ LK.forEach(function(k){$('l-p'+k).onclick=function(){
 $('l-loop').onclick=function(){var sl=L.slots[L.sel];sl.loop=sl.loop===false;renderL();save()};
 $('l-rev').onclick=function(){var s=L.slots[L.sel];s.rev=!s.rev;renderL();save()};
 $('l-mute').onclick=function(){var s=L.slots[L.sel];s.mute=!s.mute;renderL();save()};
-function lclear(k){lact.slice().forEach(function(x){if(x._k===k){try{x.stop()}catch(e){}}});lbuf[k]=lrb[k]=lpk[k]=null;linfo[k]=null;lname[k]='';renderL();netLoop(k)}
+function lclear(k){lact.slice().forEach(function(x){if(x._k===k){try{x.stop()}catch(e){}}});lbuf[k]=lrb[k]=lpk[k]=null;lnorm[k]=1;linfo[k]=null;lname[k]='';renderL();netLoop(k)}
 $('l-clr').onclick=function(){if(NET.role==='guest')netSend({t:'lc',k:L.sel});else lclear(L.sel)};
 function renderL(){
   var k=L.sel,s=L.slots[k];
@@ -1963,7 +1967,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=29; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=30; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
