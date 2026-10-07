@@ -360,10 +360,74 @@ html.fsl,html.fsl body{overflow:hidden}
 .zone.shut>*:not(h2){display:none}
 .zone.shut>h2{margin-bottom:-14px;border-bottom:0;border-radius:8px}
 @media (max-width:700px){.machine{padding:10px}.zone{padding:10px}.zone>h2{margin:-10px -10px -6px;padding:8px 10px 7px}.zone.shut>h2{margin-bottom:-10px}.tbar{margin:0 -10px;padding:7px 10px}.tbar #astate{flex:1 1 100%}.tbar #astate[data-ok]{display:none}}
+/* verrou d'accès : tant que body porte « locked », seule la porte est visible */
+#lock{display:none;position:fixed;inset:0;z-index:100;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--page);
+  padding:calc(env(safe-area-inset-top,0px) + 24px) calc(env(safe-area-inset-right,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 24px) calc(env(safe-area-inset-left,0px) + 16px)}
+body.locked{overflow:hidden}
+body.locked #lock{display:flex}
+body.locked>.machine,body.locked>#reqbar{visibility:hidden}
+.lockcard{margin:auto;width:min(430px,100%);display:flex;flex-direction:column;gap:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 18px}
+.lockcard h1{font-family:var(--f-display);font-size:26px;font-weight:400;letter-spacing:.06em;margin:0;line-height:1.1}
+.lockcard h2{margin:0;font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;text-transform:uppercase}
+.lockcard form,.lockcard .lockw{display:flex;flex-direction:column;gap:10px;margin:0}
+.lockcard form+form,.lockcard form+.lockw{padding-top:18px;border-top:1px solid var(--line)}
+.lockcard .sel{font-size:16px;min-height:44px;width:100%;min-width:0}
+.lockcard .btn{min-height:44px}
+.lockcard [hidden]{display:none}
+.lockrow{display:flex;gap:8px}
+.lockrow .sel{flex:1 1 0}
+.lockrow .btn{flex:0 0 auto}
+#lock-c{text-transform:uppercase;letter-spacing:.2em;font-family:var(--f-mono)}
+.lockmsg{font-size:13px;margin:0;color:var(--ink)}
+.lockmsg:empty{display:none}
+.lockcard.bad{animation:lockno .28s}
+@keyframes lockno{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+@media (prefers-reduced-motion:reduce){.lockcard.bad{animation:none}}
 #export{width:100%;font-family:var(--f-mono);font-size:12px;background:var(--well);color:var(--well-ink);border:0;border-radius:6px;padding:10px;min-height:150px}
 </style>
 </head>
-<body>
+<body class="locked">
+<script>
+/* Verrou d'accès. Le mot de passe n'est pas écrit ici : seule son empreinte l'est. Un appareil déjà déverrouillé ne revoit pas la porte. */
+var LOCKH='2fd2322c360ca1822427c4f0f0aa466512b2e0db1675c3ef7ef4b72ca39dfe6c';
+try{if(localStorage.getItem('lst-key')===LOCKH)document.body.classList.remove('locked')}catch(e){}
+</script>
+
+<div id="lock" role="dialog" aria-modal="true" aria-labelledby="lock-t">
+  <div class="lockcard" id="lock-card">
+    <div>
+      <h1 id="lock-t">LE SAINT TEH</h1>
+      <p class="hint">Accès protégé.</p>
+    </div>
+    <form id="lock-f" novalidate autocomplete="off">
+      <h2>Mot de passe</h2>
+      <label class="lbl" for="lock-i">Pour utiliser l'appli librement</label>
+      <div class="lockrow">
+        <input class="sel" id="lock-i" type="password" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="64" placeholder="Mot de passe" required>
+        <button class="btn primary" id="lock-ok" type="submit">Entrer</button>
+      </div>
+      <p class="lockmsg" id="lock-m" role="status"></p>
+    </form>
+    <form id="lock-j" novalidate autocomplete="off">
+      <h2>Invité à une session</h2>
+      <p class="hint">Pas besoin du mot de passe : c'est le master de la session qui t'ouvre l'accès.</p>
+      <label class="lbl" for="lock-c">Code de session</label>
+      <input class="sel" id="lock-c" maxlength="5" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ABCDE">
+      <label class="lbl" for="lock-n">Ton pseudo</label>
+      <input class="sel" id="lock-n" maxlength="16" autocomplete="nickname" autocorrect="off" spellcheck="false" placeholder="Pseudo">
+      <button class="btn" id="lock-go" type="submit">Demander l'accès au master</button>
+      <p class="lockmsg" id="lock-jm" role="status"></p>
+    </form>
+    <div class="lockw" id="lock-w" hidden>
+      <h2 id="lock-wc">Session</h2>
+      <p class="lockmsg" id="lock-s" role="status"></p>
+      <div class="lockrow">
+        <button class="btn primary" id="lock-ask" type="button" hidden>Redemander au master</button>
+        <button class="btn" id="lock-x" type="button">Annuler</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <main class="machine">
   <div class="top">
@@ -441,6 +505,7 @@ html.fsl,html.fsl body{overflow:hidden}
     <div class="edrow">
       <span class="lbl" id="n-ver"></span>
       <button class="btn" id="n-upd">Vérifier les mises à jour</button>
+      <button class="btn" id="n-lock" hidden>Verrouiller cet appareil</button>
     </div>
   </section>
 
@@ -2141,7 +2206,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden&&pla
 /* ---------- transport ---------- */
 $('play').onclick=function(){playing?stop():start()};
 document.addEventListener('keydown',function(e){
-  if(e.code!=='Space')return;var t=e.target.tagName;
+  if(e.code!=='Space'||lockOn())return;var t=e.target.tagName;
   if(t==='BUTTON'||t==='INPUT'||t==='SELECT'||t==='TEXTAREA'||e.target.classList.contains('knob'))return;
   e.preventDefault();playing?stop():start();
 });
@@ -2150,11 +2215,11 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=42; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=43; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
-function nmsg(m){$('n-msg').textContent=m||''}
+function nmsg(m){$('n-msg').textContent=m||'';$('lock-s').textContent=m||''}
 function omit(o,ks){var r={};for(var k in o)if(ks.indexOf(k)<0)r[k]=o[k];return r}
 function one(v,list,def){return list.indexOf(v)>=0?v:def}
 function num(v,def){v=+v;return isFinite(v)?Math.max(0,Math.min(1,v)):def}
@@ -2413,6 +2478,7 @@ function netFile(ab,name,k){
    il rejoint directement ; sinon on le lui demande d'abord. */
 function guestJoin(code){
   if(myName()){guestStart(code);return}
+  if(!UNL){lockInv(code);return} /* appareil verrouillé : le pseudo se saisit sur la porte */
   Z.m=true;renderZ();$('n-solo').classList.add('nick');$('n-nick').hidden=false;$('n-nick-c').textContent='Session '+code;$('n-nick')._code=code;
   nmsg('Choisis un pseudo pour rejoindre la session '+code+'.');
   try{$('n-nick').scrollIntoView({block:'center'});$('n-nick-i').focus({preventScroll:true})}catch(e){}
@@ -2953,7 +3019,7 @@ document.addEventListener('visibilitychange',function(){
 
 /* ----- interface de session ----- */
 function nui(){
-  cueUI();
+  lockUI();cueUI();
   var on=NET.role!=='solo',host=NET.role==='host',linked=host?!!NET.up:!!(hconn&&hconn.open),n=host?guests().length:0,nq=REQ.length;
   permUI();guestsUI();padUI();$('n-me').hidden=host;$('n-ask').hidden=!NET.denied;
   $('n-acc').textContent=host||NET.denied?'':NET.wait?'En attente du master':NET.pm==null?'':'Tes accès : '+pnames(NET.pm);
@@ -3053,12 +3119,86 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)updW
 window.addEventListener('pageshow',function(e){if(e.persisted)updWatch(true)});
 setInterval(function(){if(!document.hidden)updWatch(false)},120000);
 document.addEventListener('pointerdown',function(){NET.touched=true},true);
+/* ----- verrou d'accès -----
+   Utiliser l'appli librement demande le mot de passe, une fois par appareil. Sans lui, on n'entre que comme invité d'une
+   session : la porte reste fermée tant que le master n'a pas accepté, et se referme s'il retire l'invité.
+   Seule l'empreinte du mot de passe (LOCKH, en tête de page) est dans le code. */
+var SHK=[],SHH=[],LOCKS='le-saint-teh/acces/1',UNL=!document.body.classList.contains('locked'),lockN=0,lockT=0;
+(function(){function fr(x){return((x-Math.floor(x))*4294967296)|0}
+  for(var n=2,c=0,i;c<64;n++){for(i=2;i*i<=n&&n%i;i++);if(i*i>n){if(c<8)SHH[c]=fr(Math.pow(n,1/2));SHK[c++]=fr(Math.pow(n,1/3))}}})();
+function sha256(s){
+  s=unescape(encodeURIComponent(String(s)));
+  var l=s.length,N=((l+8>>6)+1)*16,b=[],w=[],H=SHH.slice(),i,j,o='';
+  function r(x,k){return x>>>k|x<<(32-k)}
+  for(i=0;i<N;i++)b[i]=0;
+  for(i=0;i<l;i++)b[i>>2]|=s.charCodeAt(i)<<(24-(i&3)*8);
+  b[l>>2]|=128<<(24-(l&3)*8);b[N-1]=l*8;
+  for(j=0;j<N;j+=16){
+    var a=H[0],B2=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+    for(i=0;i<64;i++){
+      if(i<16)w[i]=b[j+i];else{var x=w[i-15],y=w[i-2];w[i]=(w[i-16]+(r(x,7)^r(x,18)^x>>>3)+w[i-7]+(r(y,17)^r(y,19)^y>>>10))|0}
+      var t1=(h+(r(e,6)^r(e,11)^r(e,25))+(e&f^~e&g)+SHK[i]+w[i])|0,t2=((r(a,2)^r(a,13)^r(a,22))+(a&B2^a&c^B2&c))|0;
+      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=B2;B2=a;a=(t1+t2)|0}
+    H[0]=H[0]+a|0;H[1]=H[1]+B2|0;H[2]=H[2]+c|0;H[3]=H[3]+d|0;H[4]=H[4]+e|0;H[5]=H[5]+f|0;H[6]=H[6]+g|0;H[7]=H[7]+h|0}
+  for(i=0;i<8;i++)o+=('0000000'+(H[i]>>>0).toString(16)).slice(-8);
+  return o}
+function lockHash(p){p=String(p).replace(/\s+/g,'').toLowerCase();var h=sha256(LOCKS+p);for(var i=0;i<1200;i++)h=sha256(h+LOCKS+p);return h}
+function lockOpen(){return UNL||(NET.role==='guest'&&!!NET.joined&&!NET.wait&&!NET.denied)}
+function lockOn(){return !lockOpen()}
+function lockUI(){
+  var open=lockOpen(),was=!document.body.classList.contains('locked'),g=NET.role==='guest',m=document.querySelector('.machine');
+  document.body.classList.toggle('locked',!open);
+  try{if(open)m.removeAttribute('inert');else m.setAttribute('inert','')}catch(e){}
+  $('n-lock').hidden=!UNL;
+  if(open){if(!was){try{if(document.activeElement&&$('lock').contains(document.activeElement))document.activeElement.blur()}catch(e){}window.scrollTo(0,0);redraw()}return}
+  if(was){ /* la porte se referme (invité retiré par le master) : plus de son ni de plein écran derrière */
+    try{if(KFS)kfsSet('')}catch(e){}try{if(CFS)cfsSet(false)}catch(e){}try{cueQuiet()}catch(e){}}
+  $('lock-j').hidden=g;$('lock-w').hidden=!g;$('lock-ask').hidden=!NET.denied;
+  $('lock-wc').textContent=g?'Session '+ncode:'Session';
+}
+function lockInv(code){
+  $('lock-c').value=code||'';$('lock-jm').textContent='Choisis un pseudo pour rejoindre la session '+code+'.';
+  lockUI();try{$('lock-n').focus({preventScroll:true})}catch(e){}
+}
+$('lock-f').addEventListener('submit',function(e){
+  e.preventDefault();
+  var inp=$('lock-i'),v=inp.value,now=Date.now();
+  if(now<lockT){$('lock-m').textContent='Trop d\'essais : réessaie dans '+Math.ceil((lockT-now)/1000)+' s.';return}
+  if(!v.replace(/\s+/g,'')){$('lock-m').textContent='Entre le mot de passe.';try{inp.focus()}catch(x){}return}
+  if(lockHash(v)===LOCKH){
+    UNL=true;lockN=0;inp.value='';$('lock-m').textContent='';
+    try{localStorage.setItem('lst-key',LOCKH)}catch(x){}
+    lockUI();nui();return}
+  lockN++;if(lockN>=4)lockT=now+Math.min(60,5*Math.pow(2,lockN-4))*1000; /* 5 s, 10 s, 20 s… après le 4e essai raté */
+  inp.value='';$('lock-m').textContent='Mot de passe incorrect.'+(lockT>now?' Nouvel essai dans '+Math.round((lockT-now)/1000)+' s.':'');
+  var c=$('lock-card');c.classList.remove('bad');void c.offsetWidth;c.classList.add('bad');try{inp.focus()}catch(x){}
+});
+$('lock-j').addEventListener('submit',function(e){
+  e.preventDefault();
+  var c=$('lock-c').value.trim().toUpperCase(),n=gname($('lock-n').value);
+  if(!CODE_RE.test(c)){$('lock-jm').textContent='Le code de session fait 5 caractères (lettres et chiffres).';try{$('lock-c').focus()}catch(x){}return}
+  if(!n){$('lock-jm').textContent='Il faut un pseudo pour rejoindre la session.';try{$('lock-n').focus()}catch(x){}return}
+  try{localStorage.setItem('lst-name',n)}catch(x){}memName=n;$('n-name').value=n;$('lock-jm').textContent='';
+  try{history.replaceState(null,'',location.pathname+location.search+'#'+c)}catch(x){}
+  guestStart(c);
+});
+$('lock-ask').onclick=function(){$('n-ask').onclick()};
+$('lock-x').onclick=function(){$('n-leave').onclick()};
+$('n-lock').onclick=function(){
+  if(NET.role==='host'&&conns.length&&!confirm('Verrouiller cet appareil ferme la session en cours. Continuer ?'))return;
+  try{saveNow()}catch(e){}
+  try{localStorage.removeItem('lst-key')}catch(e){}
+  $('n-leave').onclick();
+};
+window.addEventListener('storage',function(e){if(e.key==='lst-key'&&e.newValue!==LOCKH&&UNL&&NET.role==='solo')location.reload()});
 function netBoot(){
   var h=(location.hash||'').replace(/^#/,'').toUpperCase(),hosting=false,saved='';
   try{hosting=sessionStorage.getItem('lst-hosting')==='1';saved=localStorage.getItem('lst-host')||''}catch(e){}
   try{if(/[?&]v=\d+/.test(location.search))history.replaceState(null,'',location.pathname+location.hash)}catch(e){}
-  var want=hosting&&CODE_RE.test(saved)?'host':CODE_RE.test(h)?'guest':'';
+  var want=hosting&&UNL&&CODE_RE.test(saved)?'host':CODE_RE.test(h)?'guest':'';
+  $('lock-n').value=myName();if(CODE_RE.test(h))$('lock-c').value=h;
   nver();nui();if(want)nmsg('Vérification de la version…');
+  if(lockOn()&&want!=='guest')try{$('lock-i').focus({preventScroll:true})}catch(e){}
   updCheck(function(newer,b){
     if(newer&&!updTried(b)&&(want||!NET.touched)){updGo(b);return} /* au lancement, avant que tu aies commencé à jouer */
     if(newer){NET.upd=b;nver()}
