@@ -389,7 +389,7 @@ body.locked>.machine,body.locked>#reqbar{visibility:hidden}
 <body class="locked">
 <script>
 /* Verrou d'accès. Le mot de passe n'est pas écrit ici : seule son empreinte l'est. Un appareil déjà déverrouillé ne revoit pas la porte. */
-var LOCKH='2fd2322c360ca1822427c4f0f0aa466512b2e0db1675c3ef7ef4b72ca39dfe6c';
+var LOCKH='2bb3f7bd1976cbeadd6f1ededdf80debaf3acd36cbde27aaf405197036d8a7bc';
 try{if(localStorage.getItem('lst-key')===LOCKH)document.body.classList.remove('locked')}catch(e){}
 </script>
 
@@ -403,7 +403,7 @@ try{if(localStorage.getItem('lst-key')===LOCKH)document.body.classList.remove('l
       <h2>Mot de passe</h2>
       <label class="lbl" for="lock-i">Pour utiliser l'appli librement</label>
       <div class="lockrow">
-        <input class="sel" id="lock-i" type="password" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="64" placeholder="Mot de passe" required>
+        <input class="sel" id="lock-i" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="64" placeholder="Mot de passe" required>
         <button class="btn primary" id="lock-ok" type="submit">Entrer</button>
       </div>
       <p class="lockmsg" id="lock-m" role="status"></p>
@@ -2215,7 +2215,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=43; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=44; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
