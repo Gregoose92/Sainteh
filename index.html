@@ -360,6 +360,7 @@ html.fsl,html.fsl body{overflow:hidden}
 .zone.shut>*:not(h2){display:none}
 .zone.shut>h2{margin-bottom:-14px;border-bottom:0;border-radius:8px}
 @media (max-width:700px){.machine{padding:10px}.zone{padding:10px}.zone>h2{margin:-10px -10px -6px;padding:8px 10px 7px}.zone.shut>h2{margin-bottom:-10px}.tbar{margin:0 -10px;padding:7px 10px}.tbar #astate{flex:1 1 100%}.tbar #astate[data-ok]{display:none}}
+#lb-live,#ly-live{display:none!important} /* live libre pour tous : plus de bouton demander / rendre */
 #export{width:100%;font-family:var(--f-mono);font-size:12px;background:var(--well);color:var(--well-ink);border:0;border-radius:6px;padding:10px;min-height:150px}
 </style>
 </head>
@@ -2150,7 +2151,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=45; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=46; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=3,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2253,8 +2254,9 @@ function hostRx(c,m){
     case 'hi':
       netFlush();c._ok=true;if((m.b|0)>BUILD){NET.upd=m.b|0;nver()} /* un invité a une version plus récente : elle existe donc */
       var gid=String(m.id||c._id).slice(0,40),a=ACC[gid],nm=gname(m.n);c._gid=gid;if(nm)nm=nameFree(nm,gid);
-      if(a&&a.ok){if(nm)a.n=nm;c._pm=a.p;c._lv=lclean(a.lv);c._wait=false} /* déjà accepté dans cette session : il retrouve ses accès */
-      else{a=ACC[gid]={n:nm||'Invité '+(GN[gid]||(GN[gid]=++gseq)),p:'',ok:false};c._pm='';c._lv='';c._wait=true}
+      /* Sans restriction : tout invité entre directement, avec tous les instruments et le live. Le master peut encore le retirer. */
+      if(!a)a=ACC[gid]={n:nm||'Invité '+(GN[gid]||(GN[gid]=++gseq))};
+      if(nm)a.n=nm;a.p=PGS;a.lv='by';a.ok=true;c._pm=PGS;c._lv='by';c._wait=false;
       c._n=a.n;accSave();
       var s={},p={};inMaster(function(){for(x in SEC)s[x]=JSON.parse(JSON.stringify(SEC[x].get()));for(x in P)if(!PLOC[x])p[x]=P[x]});
       netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD,pm:c._pm,lv:c._lv,w:c._wait?1:0,nm:c._n});
@@ -2412,6 +2414,7 @@ function netFile(ab,name,k){
 /* Un invité ne se présente au master qu'avec un pseudo. S'il en a déjà un (session précédente, rechargement, mise à jour),
    il rejoint directement ; sinon on le lui demande d'abord. */
 function guestJoin(code){
+  guestStart(code);return; /* pseudo facultatif : sans pseudo, le master affiche « Invité 1, 2… » */
   if(myName()){guestStart(code);return}
   Z.m=true;renderZ();$('n-solo').classList.add('nick');$('n-nick').hidden=false;$('n-nick-c').textContent='Session '+code;$('n-nick')._code=code;
   nmsg('Choisis un pseudo pour rejoindre la session '+code+'.');
