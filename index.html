@@ -558,6 +558,8 @@ html.fsl,html.fsl body{overflow:hidden}
   <section class="gen">
     <h2>GÉNÉRATEUR DE BASSE</h2>
     <div class="gengrid">
+      <div class="field"><label class="lbl" for="g-style">Style</label>
+        <select id="g-style"><option value="acid">Acid</option><option value="min">Minimale</option><option value="micro">Micro</option></select></div>
       <div class="field"><label class="lbl" for="g-root">Tonique</label>
         <select id="g-root"></select></div>
       <div class="field"><label class="lbl" for="g-scale">Gamme</label>
@@ -569,6 +571,8 @@ html.fsl,html.fsl body{overflow:hidden}
           <option value="dor">Dorien</option>
           <option value="maj">Majeur</option>
           <option value="chr">Chromatique</option>
+          <option value="m7">Accord mineur 7 (minimale)</option>
+          <option value="q5">Tonique et quinte</option>
         </select></div>
       <div class="field"><label class="lbl" for="g-dens"><span>Densité</span><output id="g-dens-o"></output></label>
         <input type="range" id="g-dens" min="20" max="100" value="75"></div>
@@ -639,6 +643,8 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn" id="yc-5">Quinte</button>
         <button class="btn" id="yc-min">Mineur</button>
         <button class="btn" id="yc-maj">Majeur</button>
+        <button class="btn" id="yc-m7">Min 7</button>
+        <button class="btn" id="yc-sus">Sus4</button>
       </div>
     </div>
     <div class="screen"><canvas id="yroll" aria-label="Piano roll du synthé"></canvas></div>
@@ -690,7 +696,7 @@ html.fsl,html.fsl body{overflow:hidden}
       <div class="gengrid">
         <div class="field"><label class="lbl" for="y-style">Style</label>
           <select id="y-style">
-            <option value="arp">Arpège</option><option value="mel">Mélodie</option><option value="stab">Stabs</option>
+            <option value="arp">Arpège</option><option value="mel">Mélodie</option><option value="stab">Stabs</option><option value="min">Minimale</option><option value="micro">Micro</option>
           </select></div>
         <div class="field"><label class="lbl" for="ys-root">Tonique</label>
           <select id="ys-root"><option value="-1">Comme la basse</option></select></div>
@@ -704,6 +710,8 @@ html.fsl,html.fsl body{overflow:hidden}
             <option value="dor">Dorien</option>
             <option value="maj">Majeur</option>
             <option value="chr">Chromatique</option>
+            <option value="m7">Accord mineur 7 (minimale)</option>
+            <option value="q5">Tonique et quinte</option>
           </select></div>
         <div class="field"><label class="lbl" for="ys-dens"><span>Densité</span><output id="ys-dens-o"></output></label>
           <input type="range" id="ys-dens" min="20" max="100" value="85"></div>
@@ -858,7 +866,7 @@ html.fsl,html.fsl body{overflow:hidden}
 "use strict";
 var NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B','C'];
 var BLACK=[1,3,6,8,10];
-var SCALES={min:[0,2,3,5,7,8,10],phr:[0,1,3,5,7,8,10],pmin:[0,3,5,7,10],blues:[0,3,5,6,7,10],dor:[0,2,3,5,7,9,10],maj:[0,2,4,5,7,9,11],chr:[0,1,2,3,4,5,6,7,8,9,10,11]};
+var SCALES={min:[0,2,3,5,7,8,10],phr:[0,1,3,5,7,8,10],pmin:[0,3,5,7,10],blues:[0,3,5,6,7,10],dor:[0,2,3,5,7,9,10],maj:[0,2,4,5,7,9,11],chr:[0,1,2,3,4,5,6,7,8,9,10,11],m7:[0,3,7,10],q5:[0,7]};
 var $=function(id){return document.getElementById(id)};
 
 /* ---------- état ---------- */
@@ -997,7 +1005,7 @@ function vNorm(g,a){var o=vNew(g),k;if(!a||typeof a!=='object')return o;
     o.ftype=one(a.ftype,['lowpass','bandpass','highpass'],'lowpass');o.lfoT=one(a.lfoT,['cut','pitch'],'cut');o.preset=String(a.preset||'')}
   else if(a.o&&typeof a.o==='object'&&okSteps(a.o.pat)){for(k in o.o)if(a.o[k]!==undefined)o.o[k]=a.o[k];o.o.pat=a.o.pat;o.o.len=a.o.len===32?32:16;
     o.o.wave=one(o.o.wave,['sawtooth','square','triangle','sine'],'sawtooth');o.o.ftype=one(o.o.ftype,['lowpass','bandpass','highpass'],'lowpass');
-    o.o.lfoT=one(o.o.lfoT,['cut','pitch'],'cut');o.o.chord=one(o.o.chord,['off','5','min','maj'],'off');o.o.mute=!!o.o.mute;o.o.preset=String(o.o.preset||'')}
+    o.o.lfoT=one(o.o.lfoT,['cut','pitch'],'cut');o.o.chord=one(o.o.chord,['off','5','min','maj','m7','sus'],'off');o.o.mute=!!o.o.mute;o.o.preset=String(o.o.preset||'')}
   return o}
 var VS={b:[vNew('b'),vNew('b'),vNew('b')],y:[vNew('y'),vNew('y'),vNew('y')]};
 try{if(typeof sv!=='undefined'&&sv&&sv.vs&&sv.vc)['b','y'].forEach(function(g){var c=sv.vc[g];if(c===0||c===1||c===2)VC[g]=VN[g]=c;
@@ -1378,10 +1386,10 @@ function changed(){refresh();save();if(!$('export').hidden)$('export').value=she
 /* ---------- générateur ---------- */
 NOTE.slice(0,12).forEach(function(n,i){var o=document.createElement('option');o.value=i;o.textContent=n;$('g-root').appendChild(o)});
 $('g-root').value=9;
-function genState(){return {root:+$('g-root').value,scale:$('g-scale').value,dens:+$('g-dens').value,acc:+$('g-acc').value,sld:+$('g-sld').value,oct:+$('g-oct').value}}
-if(typeof savedGen==='object'&&savedGen){['root','scale','dens','acc','sld','oct'].forEach(function(k){if(savedGen[k]!=null)$('g-'+k).value=savedGen[k]})}
+function genState(){return {style:$('g-style').value||'acid',root:+$('g-root').value,scale:$('g-scale').value,dens:+$('g-dens').value,acc:+$('g-acc').value,sld:+$('g-sld').value,oct:+$('g-oct').value}}
+if(typeof savedGen==='object'&&savedGen){['style','root','scale','dens','acc','sld','oct'].forEach(function(k){if(savedGen[k]!=null)$('g-'+k).value=savedGen[k]});if($('g-style').selectedIndex<0)$('g-style').value='acid'}
 ['dens','acc','sld','oct'].forEach(function(k){var el=$('g-'+k),o=$('g-'+k+'-o');function u(){o.textContent=el.value+' %'}el.addEventListener('input',function(){u();save()});u()});
-$('g-root').onchange=$('g-scale').onchange=save;
+$('g-root').onchange=$('g-scale').onchange=$('g-style').onchange=save;
 function genStep(g,first){
   var sc=SCALES[g.scale],r=Math.random;
   var st=S((first||r()*100<g.dens)?1:0,0,0,false,false);
@@ -1398,7 +1406,39 @@ function fixLinks(g,only){
     if(st.g===0&&i>0&&pv.g===1&&!pv.s&&Math.random()<.15)st.g=2;
   }
 }
-$('b-gen').onclick=function(){var g=genState();for(var i=0;i<BL;i++)pat[i]=genStep(g,i%16===0);fixLinks(g);changed();toast('Nouveau pattern en '+NOTE[g.root]+'.')};
+/* Minimale : peu de notes, surtout la tonique, à contretemps, qui tournent en boucle. */
+function bMin(g){
+  var a=[],r=Math.random,d=g.dens/100,sc=SCALES[g.scale]||SCALES.min,i,k;
+  function nt(deg,oc){return S(1,(g.root+deg)%12,oc||0,false,false)}
+  for(i=0;i<16;i++)a.push(S(0,g.root,0,false,false));
+  [2,6,10,14].forEach(function(p){if(r()<.45+d*.5)a[p]=nt(0,r()*100<g.oct*.5?-1:0)});
+  var extra=[3,7,11,15,13,9,5,1],ne=Math.round(r()*d*3);
+  for(k=0;k<ne;k++){var p=extra[Math.floor(r()*extra.length)];a[p]=nt(r()<.65?0:(r()<.5?7:sc[Math.floor(r()*sc.length)]),r()*100<g.oct?(r()<.5?1:-1):0)}
+  if(a.filter(function(x){return x.g}).length<2){a[2]=nt(0);a[10]=nt(0)}
+  a.forEach(function(x,i){if(x.g&&r()*100<g.acc*.5)x.a=true});
+  return a;
+}
+/* Micro : notes courtes et syncopées, anticipations, tierce et septième, petit groove funk. */
+function bMicro(g){
+  var a=[],r=Math.random,d=g.dens/100,sc=SCALES[g.scale]||SCALES.min,i;
+  var w=[.85,.12,.4,.55,.15,.45,.5,.3,.65,.15,.55,.4,.2,.6,.3,.5],degs=[0,0,0,0,sc[Math.min(2,sc.length-1)],sc[sc.length-1],7,12];
+  for(i=0;i<16;i++){
+    if(r()<w[i]*(.45+d*.75)){var dg=degs[Math.floor(r()*degs.length)],o=dg>=12?1:0;dg%=12;if(r()*100<g.oct*.7)o=o?0:(r()<.6?1:-1);
+      a.push(S(1,(g.root+dg)%12,o,r()*100<g.acc,false))}
+    else a.push(S(0,g.root,0,false,false));
+  }
+  if(a.filter(function(x){return x.g}).length<3){a[0]=S(1,g.root,0,false,false);a[3]=S(1,g.root,1,false,false);a[10]=S(1,g.root,0,true,false)}
+  return a;
+}
+$('b-gen').onclick=function(){var g=genState(),i;
+  if(g.style==='min'||g.style==='micro'){
+    var b1=g.style==='min'?bMin(g):bMicro(g),b2=JSON.parse(JSON.stringify(b1));
+    if(g.style==='micro'){var v=g.style==='micro'?bMicro(g):null;for(i=12;i<16;i++)b2[i]=v[i]} /* réponse : la fin de la 2e mesure change */
+    else if(Math.random()<.5){var q=[3,7,11,15][Math.floor(Math.random()*4)];b2[q]=b2[q].g?S(0,g.root,0,false,false):S(1,g.root,0,false,false)}
+    var all=b1.concat(b2);for(i=0;i<32;i++)pat[i]=all[i];
+    fixLinks({sld:g.sld*(g.style==='min'?.3:.45)});
+  }else{for(i=0;i<BL;i++)pat[i]=genStep(g,i%16===0);fixLinks(g)}
+  changed();toast('Nouveau pattern '+({acid:'acid',min:'minimal',micro:'micro'}[g.style]||'')+' en '+NOTE[g.root]+'.')};
 $('b-mut').onclick=function(){var g=genState(),ids=[];while(ids.length<3){var x=Math.floor(Math.random()*BL);if(ids.indexOf(x)<0)ids.push(x)}
   ids.forEach(function(i){pat[i]=genStep(g,false)});fixLinks(g,ids);changed();toast('Pas modifiés : '+ids.map(function(i){return i+1}).sort(function(a,b){return a-b}).join(', ')+'.')};
 $('b-l').onclick=function(){var a=pat.splice(0,BL);a.push(a.shift());pat=a.concat(pat);changed()};
@@ -1656,7 +1696,7 @@ function ytrig(st,t){
 }
 function yOff(t){yvca.gain.cancelScheduledValues(t);yvca.gain.setTargetAtTime(0,t,relTau(P.yrel));yGate=false}
 var ySub,ysubg,yC,yD,ychg,yN,ynz,ylfo,ylfoF,ylfoP,ypre,yshp,lastY=-1;
-var YCH={off:[0,0],'5':[7,12],min:[3,7],maj:[4,7]};
+var YCH={off:[0,0],'5':[7,12],min:[3,7],maj:[4,7],m7:[3,10],sus:[5,7]};
 function ypitch(st,t){var f=yfreq(st),gl=P.ygl*P.ygl*.15,ch=YCH[Y.chord]||YCH.off;
   [[yA,0],[yB,YINT[Math.round(P.yint*6)]],[ySub,-12],[yC,ch[0]],[yD,ch[1]]].forEach(function(v){var o=v[0],fv=f*Math.pow(2,v[1]/12);
     o.frequency.cancelScheduledValues(t);if(gl>.001)o.frequency.setTargetAtTime(fv,t,gl);else o.frequency.setValueAtTime(fv,t)})}
@@ -1762,6 +1802,14 @@ function ybar(g){
     for(i=0;i<16;i++)a.push(i===0||r()<d?ymk(yoct(g,ydeg(g,ch[ord[c++%ord.length]])),yacc(g,i%4===0)):yrest(g))}
   else if(g.style==='mel'){k=2;var mv=[-2,-1,-1,0,1,1,2];
     for(i=0;i<16;i++){if(i===0||r()<d){k=Math.max(0,Math.min(9,k+mv[Math.floor(r()*mv.length)]));a.push(ymk(yoct(g,ydeg(g,k)),yacc(g,i%4===0)))}else a.push(yrest(g))}}
+  else if(g.style==='min'){ /* minimale : un ou deux coups à contretemps, toujours la même note */
+    for(i=0;i<16;i++)a.push(yrest(g));var nm=ydeg(g,r()<.7?0:2),ps=[[2,10],[3,11],[6,14],[2,7,10],[3,10,14]][Math.floor(r()*5)];
+    ps.forEach(function(p,j){if(j<2||r()<d)a[p]=ymk(nm,yacc(g,j===0))})}
+  else if(g.style==='micro'){ /* micro : petit motif haché en doubles croches, notes de l'accord avec septième */
+    for(i=0;i<16;i++)a.push(yrest(g));var start=[0,2,3,5,8,11][Math.floor(r()*6)],len=3+Math.floor(r()*3),tones=[0,2,4,6],mt=[];
+    for(k=0;k<len;k++)mt.push(tones[Math.floor(r()*tones.length)]);
+    for(k=0;k<len;k++){var pp=(start+k+(k>1&&r()<.4?1:0))%16;if(k===0||r()<.4+d*.6)a[pp]=ymk(yoct(g,ydeg(g,mt[k])),yacc(g,k===0))}
+    if(r()<d){var ec=(start+8)%16;a[ec]=ymk(yoct(g,ydeg(g,mt[0])),false)}}
   else{for(i=0;i<16;i++)a.push(yrest(g));var d0=r()<.5?0:4;
     [0,3,6,10,12,14].forEach(function(p){if(p===0||r()<d)a[p]=ymk(yoct(g,ydeg(g,r()<.7?d0:d0+2)),yacc(g,true))})}
   return a;
@@ -1776,7 +1824,9 @@ function yties(g,st,len,only){
 }
 $('y-gen').onclick=function(){
   var g=ygenCtx(),b1=ybar(g),b2=g.style==='mel'?ybar(g):JSON.parse(JSON.stringify(b1));
+  if(g.style==='micro'||g.style==='min'){g=JSON.parse(JSON.stringify(g));g.tie=g.tie*(g.style==='min'?.3:.5)} /* notes courtes */
   yties(g,b1,16);if(g.style==='mel')yties(g,b2,16);else b2=JSON.parse(JSON.stringify(b1));
+  if(g.style==='micro'){var v2=ybar(g);for(var q=12;q<16;q++)b2[q]=v2[q];yties(g,b2,16)} /* réponse en fin de 2e mesure */
   Y.pat=b1.concat(b2);ychanged();ytoast('Synthé généré en '+NOTE[g.root]+'.');
 };
 $('y-mut').onclick=function(){
@@ -1808,7 +1858,17 @@ var BP={
   dub:    {g:'Mouvement',n:'Dub wobble',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.35,.5,.2,.5,.5,.1,.9,.25,.2,.4,.45,.5,.3,.25])},
   wobble: {g:'Mouvement',n:'Wobble rapide',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.4,.6,.1,.5,.5,.05,.95,.2,.35,.5,.62,.6,.1,.1])},
   vib:    {g:'Mouvement',n:'Vibrato',w:'sawtooth',f:'lowpass',l:'pitch',k:bset([.45,.7,.55,.4,.7,0,.7,.12,.3,0,.55,.3,.15,.1])},
-  sweep:  {g:'Mouvement',n:'Balayage lent',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.4,.75,.3,.5,.6,0,.8,.15,.25,0,.12,.7,.2,.15])}
+  sweep:  {g:'Mouvement',n:'Balayage lent',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.4,.75,.3,.5,.6,0,.8,.15,.25,0,.12,.7,.2,.15])},
+  mroll:  {g:'Minimale',n:'Rolling minimal',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.3,.35,.35,.2,.4,0,.35,.05,.1,.5,.4,0,.1,0])},
+  msub:   {g:'Minimale',n:'Sub minimal',w:'triangle',f:'lowpass',l:'cut',k:bset([.25,.1,.15,.2,.3,0,.4,.08,0,.8,.4,0,0,0])},
+  mblip:  {g:'Minimale',n:'Blip sec (passe-bande)',w:'square',f:'bandpass',l:'cut',k:bset([.55,.8,.6,.06,.5,0,.14,.03,.55,.15,.4,0,.15,0])},
+  mdub:   {g:'Minimale',n:'Dub minimal (écho)',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.32,.45,.35,.25,.4,0,.35,.06,.1,.3,.4,0,.45,.3])},
+  mpulse: {g:'Minimale',n:'Pulse hypnotique',w:'square',f:'lowpass',l:'cut',k:bset([.3,.55,.3,.3,.4,0,.4,.06,.2,.3,.08,.35,.15,.1])},
+  uclick: {g:'Micro',n:'Click micro',w:'triangle',f:'lowpass',l:'cut',k:bset([.55,.2,.8,.03,.4,0,.08,.02,.05,.4,.4,0,0,0])},
+  urubber:{g:'Micro',n:'Basse élastique',w:'triangle',f:'lowpass',l:'pitch',k:bset([.35,.3,.5,.15,.5,0,.3,.05,.15,.6,.6,.08,.1,0])},
+  uwood:  {g:'Micro',n:'Basse bois (passe-bande)',w:'square',f:'bandpass',l:'cut',k:bset([.5,.85,.45,.1,.35,0,.18,.03,.6,.25,.4,0,.2,.1])},
+  ufunk:  {g:'Micro',n:'Micro funk',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.38,.5,.55,.12,.65,0,.25,.04,.15,.45,.4,0,.1,0])},
+  udust:  {g:'Micro',n:'Poussière (passe-haut + sub)',w:'sawtooth',f:'highpass',l:'cut',k:bset([.25,.4,.5,.06,.3,0,.12,.03,.3,.6,.75,.15,.25,.15])}
 };
 function fillPresets(sel,set){
   var o=document.createElement('option');o.value='';o.textContent='Réglage perso';sel.appendChild(o);var groups={};
@@ -1829,7 +1889,7 @@ function renderB(){
 var YOPT=[['y-saw','wave','sawtooth'],['y-sq','wave','square'],['y-tri','wave','triangle'],['y-sin','wave','sine'],
   ['yf-lp','ftype','lowpass'],['yf-bp','ftype','bandpass'],['yf-hp','ftype','highpass'],
   ['yl-cut','lfoT','cut'],['yl-pitch','lfoT','pitch'],
-  ['yc-off','chord','off'],['yc-5','chord','5'],['yc-min','chord','min'],['yc-maj','chord','maj']];
+  ['yc-off','chord','off'],['yc-5','chord','5'],['yc-min','chord','min'],['yc-maj','chord','maj'],['yc-m7','chord','m7'],['yc-sus','chord','sus']];
 YOPT.forEach(function(o){$(o[0]).onclick=function(){Y[o[1]]=o[2];Y.preset='';applyParams();ychanged();ytap(Y.pat[Y.sel])}});
 function kset(a){var o={};['yoct','ydet','ycut','yres','yenv','yatt','ydec','ysus','yrel','ygl','ydly','yrev','yint','ysub','ynoise','ylfor','ylfod','ydrv'].forEach(function(k,i){o[k]=a[i]});return o}
 var YP={
@@ -1854,7 +1914,17 @@ var YP={
   wind:   {g:'Nappes',n:'Souffle',w:'sawtooth',f:'bandpass',l:'cut',c:'off',k:kset([.5,0,.62,.35,.3,.3,.7,.85,.6,0,.4,.7,.5,0,1,.18,.6,0])},
   sub:    {g:'Basses et effets',n:'Basse sub',w:'sine',f:'lowpass',l:'cut',c:'off',k:kset([.25,0,.4,0,.2,0,.5,.8,.2,.25,0,0,.5,.6,0,.4,0,.3])},
   ywobble:{g:'Basses et effets',n:'Wobble',w:'sawtooth',f:'lowpass',l:'cut',c:'off',k:kset([.25,.3,.35,.5,.1,.02,.9,.9,.2,.1,.1,.1,.5,.5,0,.6,.7,.4])},
-  siren:  {g:'Basses et effets',n:'Sirène douce',w:'sine',f:'lowpass',l:'pitch',c:'off',k:kset([.5,0,.9,0,0,.05,.9,1,.3,0,.4,.3,.5,0,0,.3,1,0])}
+  siren:  {g:'Basses et effets',n:'Sirène douce',w:'sine',f:'lowpass',l:'pitch',c:'off',k:kset([.5,0,.9,0,0,.05,.9,1,.3,0,.4,.3,.5,0,0,.3,1,0])},
+  mstab:  {g:'Minimale',n:'Stab dub (min 7)',w:'sawtooth',f:'lowpass',l:'cut',c:'m7',k:kset([.5,.3,.4,.3,.35,0,.25,.1,.2,0,.6,.5,.5,0,0,.4,0,.1])},
+  mperc:  {g:'Minimale',n:'Percu tonale',w:'triangle',f:'lowpass',l:'cut',c:'off',k:kset([.75,0,.55,.4,.6,0,.12,0,.1,0,.35,.25,.5,0,.1,.4,0,0])},
+  mbleep: {g:'Minimale',n:'Bleep',w:'sine',f:'lowpass',l:'cut',c:'off',k:kset([.75,0,.8,0,.2,0,.15,0,.12,0,.5,.3,.5,0,0,.4,0,0])},
+  mping:  {g:'Minimale',n:'Ping filtré (passe-bande)',w:'square',f:'bandpass',l:'cut',c:'off',k:kset([.5,.1,.62,.75,.4,0,.14,0,.1,0,.45,.3,.5,0,0,.4,0,.45])},
+  mdrone: {g:'Minimale',n:'Nappe hypnotique',w:'sawtooth',f:'lowpass',l:'cut',c:'5',k:kset([.5,.35,.3,.4,.15,.4,.7,.8,.6,0,.3,.6,.5,0,.05,.12,.4,0])},
+  ukeys:  {g:'Micro',n:'Clavier micro (min 7)',w:'triangle',f:'lowpass',l:'pitch',c:'m7',k:kset([.5,.15,.45,.1,.25,0,.4,.3,.35,0,.3,.35,.5,0,0,.55,.1,0])},
+  uvoc:   {g:'Micro',n:'Voix hachée (passe-bande)',w:'sawtooth',f:'bandpass',l:'cut',c:'off',k:kset([.5,.2,.6,.8,.3,0,.18,.15,.1,0,.35,.3,.5,0,.15,.4,0,.55])},
+  uglitch:{g:'Micro',n:'Glitch court',w:'square',f:'highpass',l:'pitch',c:'off',k:kset([.75,.05,.6,.5,.8,0,.05,0,.05,0,.4,.2,1,0,.2,.9,.3,.2])},
+  umarimba:{g:'Micro',n:'Marimba',w:'sine',f:'lowpass',l:'cut',c:'off',k:kset([.5,0,.6,0,.4,0,.2,0,.2,0,.25,.3,1,0,0,.4,0,0])},
+  usus:   {g:'Micro',n:'Accord sus4 pluck',w:'triangle',f:'lowpass',l:'cut',c:'sus',k:kset([.5,.2,.5,.2,.4,0,.3,.05,.3,0,.45,.4,.5,0,0,.4,0,0])}
 };
 fillPresets($('y-preset'),YP);
 $('y-preset').onchange=function(){var n=this.value,p=YP[n];if(!p){Y.preset='';save();return}
@@ -2258,8 +2328,8 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=47; /* numéro de version de l'appli : identique à celui de version.json */
-var PROTO=4,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
+var BUILD=48; /* numéro de version de l'appli : identique à celui de version.json */
+var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
 function nmsg(m){$('n-msg').textContent=m||''}
@@ -2280,7 +2350,7 @@ var SEC={
   Y:{get:function(){return omit(Y,['sel','lo','lacc'])},
     set:function(d){if(!okSteps(d.pat))return;Y.pat=d.pat;Y.len=d.len===16?16:32;Y.mute=!!d.mute;Y.preset=String(d.preset||'');
       Y.wave=one(d.wave,['sawtooth','square','triangle','sine'],'sawtooth');Y.ftype=one(d.ftype,['lowpass','bandpass','highpass'],'lowpass');
-      Y.lfoT=one(d.lfoT,['cut','pitch'],'cut');Y.chord=one(d.chord,['off','5','min','maj'],'off');if(Y.sel>=Y.len)Y.sel=0},
+      Y.lfoT=one(d.lfoT,['cut','pitch'],'cut');Y.chord=one(d.chord,['off','5','min','maj','m7','sus'],'off');if(Y.sel>=Y.len)Y.sel=0},
     draw:function(){renderY()}},
   D:{get:function(){return omit(D,['sel'])},
     set:function(d){if(!okDrums(d))return;D.pat=d.pat;D.inst=d.inst;D.v=d.v==='B'?'B':'A';D.chain=!!d.chain;D.auto=one(+d.auto,[0,2,4,8],0);D.kick=String(d.kick||'');
