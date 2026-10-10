@@ -126,6 +126,11 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 
 /* générateur */
 .gen{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
+.kauto{display:flex;align-items:center;gap:8px;max-width:680px;flex-wrap:wrap}
+.kautob{flex:1 1 200px;min-height:56px;font-size:15px}
+.kautob[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
+.kautob.beat{filter:brightness(1.3)}
+.kauto .seg .btn{min-height:44px;min-width:44px}
 .kloops{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:680px}
 .kloop{width:100%;min-height:64px;font-size:14px;line-height:1.2;padding:6px 4px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
 .kloop[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon);box-shadow:0 0 0 3px color-mix(in srgb,var(--zc) 35%,transparent)}
@@ -477,6 +482,13 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
     </div>
     <div class="kgrid" id="kgrid"></div>
+    <div class="kauto">
+      <button class="btn kautob" id="k-auto" type="button" aria-pressed="false">✦ AUTO LIVE</button>
+      <div class="seg" role="group" aria-label="Une variation toutes les">
+        <button class="btn" id="k-ap4" type="button">4</button><button class="btn" id="k-ap8" type="button">8</button><button class="btn" id="k-ap16" type="button">16</button>
+      </div>
+      <span class="lbl">mesures</span>
+    </div>
     <div class="kloops" role="group" aria-label="Loop : maintenir pour répéter les derniers pas">
       <button class="btn kloop" id="k-loop1" data-n="1" type="button" aria-pressed="false">⟲ 1 PAS</button>
       <button class="btn kloop" id="k-loop5" data-n="5" type="button" aria-pressed="false">⟲ 5 PAS</button>
@@ -1335,7 +1347,7 @@ function tick(){
   while(nextTime<ctx.currentTime+.22){
     var d=60/bpmOf(P.tempo)/4,tt=nextTime+(cur%2?P.shuffle*d*.4:0);
     try{step(cur,bar,tt,d)}catch(e){audioMsg('Erreur audio ignorée : '+e.message)}nextTime+=d;cur=(cur+1)%16;
-    if(cur===0){bar++;if(fillArmed){fillArmed=false;$('fill').setAttribute('aria-pressed',false)}netQueued()}
+    if(cur===0){bar++;if(fillArmed){fillArmed=false;$('fill').setAttribute('aria-pressed',false)}netQueued();try{autoBar()}catch(e){}}
   }
   timer=setTimeout(tick,25);
 }
@@ -1357,7 +1369,7 @@ function cueStep(c,b,t){
   inCue(function(){if(CUE.b)schedule(BL===32?(b%2)*16+c:c,c,t);if(CUE.d)drums(c,t);if(CUE.y)ysched(Y.len===32?(b%2)*16+c:c,t)});
 }
 function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;playing=true;vGates();queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
-function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}rpOff(true);playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vAll(function(g){if(g==='b'){vca.gain.cancelScheduledValues(t);gateOff(t)}else yOff(t)})}queue=[];playStep=-1;playB=-1;playY=-1;cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
+function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}rpOff(true);if(AUTO.on){autoRestore(0);AUTO.n=0}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vAll(function(g){if(g==='b'){vca.gain.cancelScheduledValues(t);gateOff(t)}else yOff(t)})}queue=[];playStep=-1;playB=-1;playY=-1;cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
 function audition(st,remote,v){
   if(playing||st.g!==1)return;
   function go(){var t=ctx.currentTime+.01;bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);vca.gain.setTargetAtTime(0,t+.22,.01)}
@@ -2672,7 +2684,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=58; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=59; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2706,9 +2718,10 @@ var SEC={
       L.slots=LK.map(function(i){var s=d.slots[i]||{};return {vol:num(s.vol,.8),start:num(s.start,0),rate:num(s.rate,.5),mute:!!s.mute,rev:!!s.rev,loop:s.loop!==false}});
       var s=L.slots[L.sel];P.lvol=s.vol;P.lstart=s.start;P.lrate=s.rate},
     draw:function(){['lvol','lstart','lrate'].forEach(drawKnob);renderL()}},
-  M:{get:function(){var o={q:''};PADG.forEach(function(r){o[r]=OFFG[r];if(OFFQ[r])o.q+=r+','});return o}, /* seul le master l'émet ; un invité passe par un message dédié */
-    set:function(d){var q=String(d.q||'').split(',');PADG.forEach(function(r){OFFG[r]=!!d[r];OFFQ[r]=OFFG[r]&&q.indexOf(r)>=0})},
-    draw:function(){applyParams();offUI()}}
+  M:{get:function(){var o={q:'',a:AUTO.on?1:0,ap:AUTO.P,an:AUTO.n};PADG.forEach(function(r){o[r]=OFFG[r];if(OFFQ[r])o.q+=r+','});return o}, /* seul le master l'émet ; un invité passe par un message dédié */
+    set:function(d){var q=String(d.q||'').split(',');PADG.forEach(function(r){OFFG[r]=!!d[r];OFFQ[r]=OFFG[r]&&q.indexOf(r)>=0});
+      if(NET.role==='guest'){AUTO.on=!!d.a;if([4,8,16].indexOf(d.ap|0)>=0)AUTO.P=d.ap|0;AUTO.n=d.an|0}},
+    draw:function(){applyParams();offUI();autoUI()}}
 };
 function snap(){inMaster(function(){for(var k in SEC)lastS[k]=JSON.stringify(SEC[k].get());for(var id in P)lastP[id]=P[id]})}
 /* Appelé à chaque modification locale : envoie, 30 ms plus tard, uniquement ce qui a changé. */
@@ -2802,6 +2815,7 @@ function hostRx(c,m){
       if(m.g&&!pcan(c,m.g))break;
       if(m.q&&playing){qst.push({c:c,m:m});break} /* envoi d'un cue pendant la lecture : il entrera à la prochaine mesure */
       netApply(m);netSend(m,c);if(m.g)netTo(c,{t:'cq',g:m.g});break;
+    case 'ap':if(m.p)autoP(m.p|0);else autoSet(!!m.on);break; /* un invité allume l'auto live */
     case 'rp':if(m.on)rpOn(c,m.n);else if(RP.by===c)rpOff();break; /* un invité maintient le bouton loop */
     case 'cmd':
       if(m.c==='play'){if(!playing)start()}else if(m.c==='pause'){if(playing)stop()}
@@ -3333,6 +3347,57 @@ function permUI(){
    Une case garde tout l'instrument tel qu'il est à l'écran (séquence et réglages, sauf le volume).
    La lancer le met en place sur le master : tout de suite à l'arrêt, au début de la mesure suivante en lecture.
    En session, les pads sont ceux du master ; un invité les lance et les enregistre pour les instruments qui lui sont ouverts. */
+/* ----- AUTO LIVE : fait vivre le morceau tout seul, à la manière des « auto fill » de boîtes à rythmes -----
+   Toutes les P mesures (une phrase), une action musicale tirée au sort parmi ce qui a du contenu :
+   breakdown (rythmes coupés une demi-phrase), basse coupée une demi-phrase, synthé qui sort ou revient,
+   bascule de variation A/B des rythmes, ou rien. La dernière mesure de chaque phrase finit par un fill,
+   et parfois lance un pad enregistré qui entre au début de la phrase suivante.
+   Seul le master décide ; tout ce que l'auto live a coupé est remis à l'arrêt. */
+var AUTO={on:false,n:0,P:8,rows:{}};
+function rowHas(r){if(r==='d')return ['A','B'].some(function(v){return D.pat[v].some(function(x){return x.some(function(y){return y})})});return vHasNotes(r.charAt(0),+r.charAt(1))}
+function autoRestore(t){Object.keys(AUTO.rows).forEach(function(r){delete AUTO.rows[r];if(OFFG[r])offNow(r,t)})}
+function autoMute(r,bars){AUTO.rows[r]=AUTO.n+bars;var dl=ctx?Math.max(0,(nextTime-ctx.currentTime)*1000-10):0;
+  setTimeout(function(){if(AUTO.on&&AUTO.rows[r]!=null&&!OFFG[r])setOff(r,true)},dl)} /* coupé pile au début de la mesure */
+function autoSet(on){
+  if(NET.role==='guest'){netSend({t:'ap',on:on?1:0});return}
+  on=!!on;if(AUTO.on===on)return;AUTO.on=on;AUTO.n=0;
+  if(!on)autoRestore(playing?nextTime:0);
+  kmsg(on?'Auto live : une variation toutes les '+AUTO.P+' mesures'+(playing?'':' (lance la lecture)'):'Auto live arrêté');autoUI();save();
+}
+function autoP(p){if([4,8,16].indexOf(p)<0)return;if(NET.role==='guest'){netSend({t:'ap',p:p});return}AUTO.P=p;autoUI();save()}
+function autoBar(){
+  if(!AUTO.on||NET.role==='guest')return;
+  var P=AUTO.P,k=AUTO.n%P,r=Math.random,msg='',x;
+  for(x in AUTO.rows)if(AUTO.n>=AUTO.rows[x]){delete AUTO.rows[x];if(OFFG[x]){offNow(x,nextTime);msg=rname(x)+' revient'}}
+  if(k===P-1){ /* dernière mesure de la phrase : fill, et parfois un pad pour la suite */
+    setFill(true);msg='fill';
+    var cand=[];PADG.forEach(function(g){PADS[g].forEach(function(d,i){if(!d)return;var same=false;try{same=padSlotKey(g,d)===padCur(g)}catch(e){}if(!same)cand.push([g,i])})});
+    if(cand.length&&r()<.45){var c=cand[Math.floor(r()*cand.length)];padLaunch(c[0],c[1],PMODE==='seq');msg='fill, puis '+rname(c[0])+' · pad '+(c[1]+1)}
+  }
+  if(k===0&&AUTO.n>0){ /* début de phrase : une action */
+    var bs=['b0','b1','b2'].filter(rowHas),ys=['y0','y1','y2'].filter(rowHas),acts=[],h=Math.max(1,P/2);
+    if(rowHas('d')&&!OFFG.d)acts.push(['drop',2]);
+    if(bs.length)acts.push(['bass',1.5]);
+    if(ys.length)acts.push(['synth',1.2]);
+    if(JSON.stringify(D.pat.A)!==JSON.stringify(D.pat.B)&&!D.chain)acts.push(['var',1.5]);
+    acts.push(['rien',1]);
+    var tot=acts.reduce(function(a,b){return a+b[1]},0),u=r()*tot,act='rien';for(var i=0;i<acts.length;i++){u-=acts[i][1];if(u<=0){act=acts[i][0];break}}
+    if(act==='drop'){autoMute('d',h);msg='breakdown : rythmes coupés '+h+' mesure'+(h>1?'s':'')}
+    else if(act==='bass'){var b=bs[Math.floor(r()*bs.length)];if(!OFFG[b]){autoMute(b,h);msg=rname(b)+' coupée '+h+' mesure'+(h>1?'s':'')}}
+    else if(act==='synth'){var y=ys[Math.floor(r()*ys.length)];if(OFFG[y]&&AUTO.rows[y]==null){offNow(y,nextTime);msg=rname(y)+' entre'}else if(!OFFG[y]){autoMute(y,P);msg=rname(y)+' sort pour '+P+' mesures'}}
+    else if(act==='var'){D.v=D.v==='A'?'B':'A';renderDrums();save();msg='rythmes : variation '+D.v}
+  }
+  AUTO.n++;if(msg)kmsg('Auto : '+msg);autoUI();save();
+}
+function autoUI(){
+  var b=$('k-auto');if(!b)return;var k=AUTO.n%AUTO.P;
+  b.setAttribute('aria-pressed',AUTO.on?'true':'false');
+  b.textContent=AUTO.on?'✦ AUTO LIVE · '+(playing?'mesure '+(k+1)+'/'+AUTO.P:'en attente de lecture'):'✦ AUTO LIVE';
+  b.classList.toggle('beat',AUTO.on&&playing&&k===0);
+  [4,8,16].forEach(function(p){$('k-ap'+p).setAttribute('aria-pressed',AUTO.P===p?'true':'false')});
+}
+$('k-auto').onclick=function(){autoSet(!AUTO.on)};
+[4,8,16].forEach(function(p){$('k-ap'+p).onclick=function(){autoP(p)}});
 /* ----- LOOP (répétition des 3 derniers pas, façon « beat repeat ») -----
    Un petit processeur audio garde en permanence les 16 dernières secondes de la sortie du master. Tant que le bouton est
    maintenu, on rejoue en boucle les trois pas (doubles croches) complets qui précèdent le pas en cours, calées sur le temps, et le direct
@@ -3524,7 +3589,7 @@ function padUI(){
       if(b._d!==d){b._d=d;while(b.lastChild&&b.lastChild!==b.firstChild)b.removeChild(b.lastChild);if(d)try{b.appendChild(padSvg(g,d))}catch(e){}}
     }
   });
-  vUI();
+  vUI();autoUI();
   RPN.forEach(function(n){$('k-loop'+n).classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest')});if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
