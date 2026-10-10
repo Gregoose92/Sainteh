@@ -129,6 +129,7 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .kloop{width:100%;max-width:680px;min-height:56px;font-size:14px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
 .kloop[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon);box-shadow:0 0 0 3px color-mix(in srgb,var(--zc) 35%,transparent)}
 .kloop.wait{opacity:.6}
+.kloop.beat{filter:brightness(1.35)}
 .stepnav{display:flex;gap:8px}
 .stepnav .btn{flex:1 1 0;min-height:44px}
 .sing{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:10px}
@@ -2665,7 +2666,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=55; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=56; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3349,13 +3350,13 @@ function rpInit(){
   }
   var url='';try{url=URL.createObjectURL(new Blob([code],{type:'application/javascript'}))}catch(e){}
   (url?ctx.audioWorklet.addModule(url):Promise.reject()).catch(function(){return ctx.audioWorklet.addModule('data:application/javascript;charset=utf-8,'+encodeURIComponent(code))})
-    .then(go).catch(function(){RP.fail=true;RP.loading=false;padKick()});
+    .then(go).catch(function(e){RP.fail=true;RP.loading=false;RP.err=String(e&&e.message||e);padKick()});
 }
 function rpOn(by){
   if(RP.on)return;
   if(NET.role==='guest'){if(!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}RP.on=true;netSend({t:'rp',on:1});padUI();return}
   if(!playing||!ctx){kmsg('Le loop répète ce qui joue : lance la lecture d\'abord');return}
-  if(!RP.ok){kmsg(RP.fail?'Loop impossible dans ce navigateur':'Loop en préparation, réessaie dans un instant');rpInit();return}
+  if(!RP.ok){kmsg(RP.fail?'Loop impossible dans ce navigateur'+(RP.err?' ('+RP.err.slice(0,80)+')':''):'Loop en préparation, réessaie dans un instant');rpInit();return}
   var d=60/bpmOf(P.tempo)/4,br=16*d,now=ctx.currentTime,tB=nextTime-cur*d;if(tB>now+.005)tB-=br; /* début de la mesure en cours */
   var nb=Math.min(3,Math.floor((tB-RP.t0)/br+1e-6));
   if(nb<1){kmsg('Le loop a besoin d\'au moins une mesure déjà jouée');return}
@@ -3368,14 +3369,28 @@ function rpOn(by){
     for(i=0;i<f;i++){var g=i/f;m.l[i]*=g;m.r[i]*=g;m.l[len-1-i]*=g;m.r[len-1-i]*=g} /* fondu de 2 ms aux raccords */
     try{ab.copyToChannel(m.l,0);ab.copyToChannel(m.r,1)}catch(e){ab.getChannelData(0).set(m.l);ab.getChannelData(1).set(m.r)}
     var src=ctx.createBufferSource(),t0=ctx.currentTime+.015,L=len/sr,off=((t0-tB)%L+L)%L;
-    src.buffer=ab;src.loop=true;src.connect(RP.loopG);src.start(t0,off);RP.src=src;
+    src.buffer=ab;src.loop=true;src.connect(RP.loopG);src.start(t0,off);RP.src=src;RP.ls={t0:t0,off:off,L:L,br:br,nb:nb};rpTick();
     RP.liveG.gain.cancelScheduledValues(t0);RP.liveG.gain.setTargetAtTime(0,t0,.004);RP.loopG.gain.cancelScheduledValues(t0);RP.loopG.gain.setTargetAtTime(1,t0,.004);
     kmsg('Loop : '+nb+' mesure'+(nb>1?'s':'')+' en boucle');
   };
   RP.node.port.postMessage({id:id,a:a,b:b});
 }
+/* pendant la boucle : le bouton dit quelle mesure est rejouée, et clignote à chaque mesure */
+var rpT=0;
+function rpTick(){
+  clearTimeout(rpT);var b=$('k-loop'),z=RP.ls;
+  if(!RP.on||!z||!ctx){rpLabel();return}
+  var x=((ctx.currentTime-z.t0)+z.off)%z.L,k=Math.max(0,Math.floor(x/z.br));
+  b.textContent='⟲ EN BOUCLE · mesure '+(k+1)+'/'+z.nb+' · relâche pour reprendre';b.classList.toggle('beat',(x%z.br)<.12);
+  rpT=setTimeout(rpTick,40);
+}
+function rpLabel(){
+  var b=$('k-loop');b.classList.remove('beat');
+  if(NET.role==='guest'){b.textContent=RP.on?'⟲ LOOP demandé au master · relâche pour reprendre':'⟲ LOOP · maintenir pour répéter les 3 dernières mesures';return}
+  b.textContent=RP.fail?'⟲ LOOP indisponible dans ce navigateur':RP.on?'⟲ LOOP · préparation…':!playing?'⟲ LOOP · lance la lecture pour l\'utiliser':!RP.ok?'⟲ LOOP · préparation…':'⟲ LOOP · maintenir pour répéter les 3 dernières mesures';
+}
 function rpOff(quiet){
-  if(!RP.on)return;RP.on=false;RP.want=false;RP.by=null;
+  if(!RP.on)return;RP.on=false;RP.want=false;RP.by=null;RP.ls=null;
   if(NET.role==='guest'){netSend({t:'rp',on:0});padUI();return}
   if(ctx&&RP.liveG){var t=ctx.currentTime;RP.liveG.gain.cancelScheduledValues(t);RP.liveG.gain.setTargetAtTime(1,t,.004);RP.loopG.gain.cancelScheduledValues(t);RP.loopG.gain.setTargetAtTime(0,t,.004);
     if(RP.src){try{RP.src.stop(t+.05)}catch(e){}RP.src=null}}
@@ -3495,7 +3510,7 @@ function padUI(){
     }
   });
   vUI();
-  var kl=$('k-loop');kl.setAttribute('aria-pressed',RP.on?'true':'false');kl.classList.toggle('wait',!playing&&NET.role!=='guest');
+  var kl=$('k-loop');kl.setAttribute('aria-pressed',RP.on?'true':'false');kl.classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest');if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
   LK.forEach(function(k){
