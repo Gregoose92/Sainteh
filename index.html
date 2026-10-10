@@ -132,7 +132,7 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .sing h2{font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;margin:0}
 .sing .chk{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px}
 .sing .hint:empty{display:none}
-#b-sing-st{font-family:var(--f-mono);font-size:13px;color:var(--ink)}
+#b-sing-st,#y-sing-st{font-family:var(--f-mono);font-size:13px;color:var(--ink)}
 .gen h2{font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;margin:0}
 .gengrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 18px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -753,6 +753,15 @@ html.fsl,html.fsl body{overflow:hidden}
         <span id="y-toast" role="status"></span>
       </div>
     </section>
+    <div class="sing">
+      <h2>CHANTER LE SYNTHÉ</h2>
+      <div class="actions">
+        <button class="btn primary" id="y-sing" aria-pressed="false">🎤 Chanter le synthé</button>
+        <label class="lbl chk"><input type="checkbox" id="y-sing-snap" checked> Caler sur la gamme du générateur</label>
+        <button class="btn" id="y-sing-undo" hidden>Annuler la prise</button>
+      </div>
+      <p class="hint" id="y-sing-st" role="status" aria-live="polite"></p>
+    </div>
   </section>
 
   <section class="zone zl">
@@ -1496,8 +1505,17 @@ $('b-clr').onclick=function(){pat.forEach(function(s){s.g=0;s.a=false;s.s=false;
    un pas chanté à plus de moitié devient une note (la médiane des hauteurs), la même note tenue sans reprise devient une liaison,
    un changement de note sans silence devient un slide, un pas nettement plus fort devient un accent.
    Le tout est transposé dans le registre de la basse et, si on veut, calé sur la gamme du générateur. */
-var SING=null,SINGU=null;
-function singMsg(m){$('b-sing-st').textContent=m||''}
+var SING=null,SINGU={b:null,y:null};
+/* la cible d'une prise : où écrire, dans quel registre, avec quelle gamme */
+var SINGT={
+  b:{nm:'la basse',btn:'🎤 Chanter la basse',steps:function(){return BL},base:36,mid:41,lo:24,hi:60,slide:true,
+     sc:function(){return genState()},get:function(){return {pat:JSON.parse(JSON.stringify(pat)),len:BL}},
+     put:function(o){for(var i=0;i<o.length;i++)pat[i]=o[i];changed()},undo:function(u){pat=u.pat;BL=u.len;renderLen();changed()}},
+  y:{nm:'le synthé',btn:'🎤 Chanter le synthé',steps:function(){return Y.len},base:48,mid:57,lo:36,hi:72,slide:false,
+     sc:function(){var c=ygenCtx();return {root:c.root,scale:c.scale&&SCALES[c.scale]?c.scale:genState().scale}},get:function(){return {pat:JSON.parse(JSON.stringify(Y.pat)),len:Y.len}},
+     put:function(o){for(var i=0;i<o.length;i++)Y.pat[i]=o[i];ychanged()},undo:function(u){Y.pat=u.pat;Y.len=u.len;ychanged()}}
+};
+function singMsg(m,g){$((g||(SING&&SING.g)||'b')+'-sing-st').textContent=m||''}
 function midiName(m){var r=Math.round(m);return NOTE[((r%12)+12)%12]+(Math.floor(r/12)-1)}
 function pitchOf(buf,dec,sr){
   var n=Math.floor(buf.length/dec),x=new Float32Array(n),i,j,rms=0,srd=sr/dec;
@@ -1515,11 +1533,12 @@ function pitchOf(buf,dec,sr){
 function singStop(msg){
   if(!SING)return null;var S0=SING;SING=null;clearInterval(S0.iv);
   try{if(S0.stream)S0.stream.getTracks().forEach(function(t){t.stop()})}catch(e){}try{S0.vc.close()}catch(e){}
-  micEnd();var b=$('b-sing');b.setAttribute('aria-pressed','false');b.textContent='🎤 Chanter la basse';if(msg!=null)singMsg(msg);return S0;
+  micEnd();var b=$(S0.g+'-sing');b.setAttribute('aria-pressed','false');b.textContent=SINGT[S0.g].btn;if(msg!=null)singMsg(msg,S0.g);
+  ['b','y'].forEach(function(x){$(x+'-sing').disabled=false});return S0;
 }
 function median(a){var b=a.slice().sort(function(x,y){return x-y});return b.length?b[Math.floor(b.length/2)]:0}
 function singBuild(S0){
-  var steps=S0.steps,d=S0.d,t0=S0.t0,fr=S0.frames,cells=[],s,i;
+  var T=SINGT[S0.g],steps=S0.steps,d=S0.d,t0=S0.t0,fr=S0.frames,cells=[],s,i;
   for(s=0;s<steps;s++){
     var a=t0+s*d,b=a+d,fs=fr.filter(function(f){return f.t>=a&&f.t<b}),vo=fs.filter(function(f){return f.m!=null});
     var lvs=fr.filter(function(f){return f.t>=a-d*.15&&f.t<a+d*.3}),rm=fs.length?fs.reduce(function(q,f){return q+f.rms},0)/fs.length:0,
@@ -1529,12 +1548,12 @@ function singBuild(S0){
   }
   var on=cells.filter(function(c){return c.on});
   if(!on.length)return 'Je n\'ai rien entendu : chante plus fort, plus près du micro, ou sur des « da da » bien tenus.';
-  var g=genState(),snap=$('b-sing-snap').checked,pcs=(SCALES[g.scale]||SCALES.min).map(function(x){return (g.root+x)%12});
-  var k=Math.round((median(on.map(function(c){return c.m}))-41)/12)*12,rmsMed=median(on.map(function(c){return c.rms}));
+  var g=T.sc(),snap=$(S0.g+'-sing-snap').checked,pcs=(SCALES[g.scale]||SCALES.min).map(function(x){return (g.root+x)%12});
+  var k=Math.round((median(on.map(function(c){return c.m}))-T.mid)/12)*12,rmsMed=median(on.map(function(c){return c.rms}));
   function place(m){
     var t=m-k,x=Math.round(t);
     if(snap){var best=x,bd=99;for(var c=x-2;c<=x+2;c++)if(pcs.indexOf(((c%12)+12)%12)>=0&&Math.abs(c-t)<bd){bd=Math.abs(c-t);best=c}x=best}
-    while(x<24)x+=12;while(x>60)x-=12;var r=x-36,o=Math.floor(r/12),n=r-12*o;if(o>1){o=1;n=12}return {n:n,o:o,x:x};
+    while(x<T.lo)x+=12;while(x>T.hi)x-=12;var r=x-T.base,o=Math.floor(r/12),n=r-12*o;if(o>1){o=1;n=12}return {n:n,o:o,x:x};
   }
   var out=[],prev=null,cnt=0,names=[];
   for(s=0;s<steps;s++){var c=cells[s];
@@ -1542,24 +1561,23 @@ function singBuild(S0){
     var nt=place(c.m),acc=c.rms>rmsMed*1.35;
     var reart=c.early<Math.max(prev?prev.pk:0,c.pk)*.35; /* la voix est retombée juste avant ce pas : c'est une nouvelle note */
     if(prev&&c.cont&&!reart&&nt.x===prev.x)out.push(S(2,nt.n,nt.o,false,false)); /* même note tenue : liaison */
-    else{if(prev&&c.cont&&!reart&&out[s-1].g===1)out[s-1].s=true; /* on passe à une autre note sans couper la voix : slide */
+    else{if(T.slide&&prev&&c.cont&&!reart&&out[s-1].g===1)out[s-1].s=true; /* on passe à une autre note sans couper la voix : slide */
       out.push(S(1,nt.n,nt.o,acc,false));cnt++;names.push(NOTE[nt.n])}
     prev={x:nt.x,rms:c.rms,pk:c.pk};
   }
-  SINGU={pat:JSON.parse(JSON.stringify(pat)),BL:BL};
-  for(i=0;i<steps;i++)pat[i]=out[i];
-  changed();$('b-sing-undo').hidden=false;
+  SINGU[S0.g]=T.get();T.put(out);$(S0.g+'-sing-undo').hidden=false;
   return cnt+' note'+(cnt>1?'s':'')+' trouvée'+(cnt>1?'s':'')+' : '+names.slice(0,12).join(' ')+(names.length>12?'…':'')+(snap?' (calées en '+NOTE[g.root]+')':'');
 }
-$('b-sing').onclick=function(){
-  if(SING){singStop('Prise annulée.');return}
+function singStart(G,btn){
+  if(SING){var was=SING.g;singStop('Prise annulée.');if(was===G)return}
   var AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){singMsg('Micro indisponible dans ce navigateur.');return}
-  var vc;try{vc=new AC()}catch(e){singMsg('Micro indisponible dans ce navigateur.');return}
+  if(!AC||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){singMsg('Micro indisponible dans ce navigateur.',G);return}
+  var vc;try{vc=new AC()}catch(e){singMsg('Micro indisponible dans ce navigateur.',G);return}
   micOn=true;try{if(navigator.audioSession)navigator.audioSession.type='play-and-record'}catch(e){}
   try{vc.resume()}catch(e){}
-  SING={vc:vc,frames:[],steps:BL,d:60/bpmOf(P.tempo)/4*1000};
-  var btn=this;btn.setAttribute('aria-pressed','true');btn.textContent='■ Arrêter';singMsg('Autorise le micro…');
+  SING={g:G,vc:vc,frames:[],steps:SINGT[G].steps(),d:60/bpmOf(P.tempo)/4*1000};
+  ['b','y'].forEach(function(x){if(x!==G)$(x+'-sing').disabled=true}); /* une seule prise à la fois */
+  btn.setAttribute('aria-pressed','true');btn.textContent='■ Arrêter';singMsg('Autorise le micro…');
   navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:false,autoGainControl:false}}).then(function(stream){
     var S0=SING;if(!S0||S0.vc!==vc){stream.getTracks().forEach(function(t){t.stop()});return}
     S0.stream=stream;try{vc.resume()}catch(e){}
@@ -1569,7 +1587,7 @@ $('b-sing').onclick=function(){
     if(NET.role!=='guest'&&playing&&ctx){ /* la musique tourne ici : on se cale sur la prochaine mesure (une mesure paire en 32 pas) */
       var left=(16-cur)%16,tb=nextTime+left*d/1000,nb=left===0?bar:bar+1;
       if(tb-ctx.currentTime<.35){tb+=16*d/1000;nb++}
-      if(BL===32&&nb%2){tb+=16*d/1000;nb++}
+      if(S0.steps===32&&nb%2){tb+=16*d/1000;nb++}
       S0.t0=now+(tb-ctx.currentTime)*1000+outLat()+40;S0.sync=true;
     }else{ /* sinon : une mesure de décompte, puis le clic sur chaque temps pendant la prise */
       var lat=((vc.baseLatency||0)+(vc.outputLatency||0))*1000,st=vc.currentTime+.2,beats=4+S0.steps/4;
@@ -1584,12 +1602,13 @@ $('b-sing').onclick=function(){
       for(var u=0;u+ch<=buf.length;u+=ch){var e2=0;for(var w=u;w<u+ch;w++)e2+=buf[w]*buf[w];e2=Math.sqrt(e2/ch);if(e2<lmin)lmin=e2;if(e2>lmax)lmax=e2}
       S0.frames.push({t:t-win,m:r.m,rms:r.rms,lo:lmin,hi:lmax});
       if(t<S0.t0){var bl=Math.ceil((S0.t0-t)/(4*d));singMsg(S0.sync?'Prêt… on chante au début de la mesure ('+bl+')':'Décompte : '+bl);return}
-      if(t>S0.t0+S0.steps*d+win+60){var Z=singStop(null);singMsg('Analyse…');singMsg(singBuild(Z));return}
+      if(t>S0.t0+S0.steps*d+win+60){var Z=singStop(null);singMsg(singBuild(Z),Z.g);return}
       var sp=Math.floor((t-S0.t0)/d);singMsg('Chante ! pas '+Math.min(S0.steps,sp+1)+'/'+S0.steps+(r.m!=null?' · '+midiName(r.m):''));
     },20);
   },function(){singStop('Micro refusé : autorise-le pour cette page dans les réglages du navigateur.')});
-};
-$('b-sing-undo').onclick=function(){if(!SINGU)return;pat=SINGU.pat;BL=SINGU.BL;SINGU=null;this.hidden=true;renderLen();changed();singMsg('Prise annulée : pattern précédent remis.')};
+}
+$('b-sing').onclick=function(){singStart('b',this)};$('y-sing').onclick=function(){singStart('y',this)};
+['b','y'].forEach(function(g){$(g+'-sing-undo').onclick=function(){var u=SINGU[g];if(!u)return;SINGU[g]=null;this.hidden=true;SINGT[g].undo(u);singMsg('Prise annulée : pattern précédent remis.',g)}});
 function sheet(){
   var L=['LE SAINT TEH — '+bpmOf(P.tempo)+' BPM — onde '+(wave==='square'?'carrée':'dent de scie'),'Pas  Note  Oct   Acc  Slide'];
   pat.slice(0,BL).forEach(function(s,i){var n=s.g===1?NOTE[s.n]:(s.g===2?'TIE':'REST');
@@ -2641,7 +2660,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=53; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=54; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
