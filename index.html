@@ -126,11 +126,14 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 
 /* générateur */
 .gen{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
-.kauto{display:flex;align-items:center;gap:8px;max-width:680px;flex-wrap:wrap}
-.kautob{flex:1 1 200px;min-height:56px;font-size:15px}
+.kauto{display:flex;align-items:stretch;gap:6px;max-width:680px;flex-wrap:nowrap}
+.kauto .btn{min-height:38px;padding:4px 8px;font-size:12px}
+.kautob{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kauto .seg{flex:0 0 auto}
+.kauto1{flex:0 0 auto}
 .kautob[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
 .kautob.beat{filter:brightness(1.3)}
-.kauto .seg .btn{min-height:44px;min-width:44px}
+.kauto .seg .btn{min-width:34px;padding:4px 6px}
 .kloops{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:680px}
 .kloop{width:100%;min-height:64px;font-size:14px;line-height:1.2;padding:6px 4px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
 .kloop[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon);box-shadow:0 0 0 3px color-mix(in srgb,var(--zc) 35%,transparent)}
@@ -484,10 +487,10 @@ html.fsl,html.fsl body{overflow:hidden}
     <div class="kgrid" id="kgrid"></div>
     <div class="kauto">
       <button class="btn kautob" id="k-auto" type="button" aria-pressed="false">✦ AUTO LIVE</button>
-      <div class="seg" role="group" aria-label="Une variation toutes les">
-        <button class="btn" id="k-ap4" type="button">4</button><button class="btn" id="k-ap8" type="button">8</button><button class="btn" id="k-ap16" type="button">16</button>
+      <div class="seg" role="group" aria-label="Une variation toutes les … mesures">
+        <button class="btn" id="k-ap4" type="button" aria-label="4 mesures">4</button><button class="btn" id="k-ap8" type="button" aria-label="8 mesures">8</button><button class="btn" id="k-ap16" type="button" aria-label="16 mesures">16</button>
       </div>
-      <span class="lbl">mesures</span>
+      <button class="btn kauto1" id="k-auto1" type="button" title="Une variation tout de suite">▶ 1×</button>
     </div>
     <div class="kloops" role="group" aria-label="Loop : maintenir pour répéter les derniers pas">
       <button class="btn kloop" id="k-loop1" data-n="1" type="button" aria-pressed="false">⟲ 1 PAS</button>
@@ -1369,7 +1372,7 @@ function cueStep(c,b,t){
   inCue(function(){if(CUE.b)schedule(BL===32?(b%2)*16+c:c,c,t);if(CUE.d)drums(c,t);if(CUE.y)ysched(Y.len===32?(b%2)*16+c:c,t)});
 }
 function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;playing=true;vGates();queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
-function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}rpOff(true);if(AUTO.on){autoRestore(0);AUTO.n=0}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vAll(function(g){if(g==='b'){vca.gain.cancelScheduledValues(t);gateOff(t)}else yOff(t)})}queue=[];playStep=-1;playB=-1;playY=-1;cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
+function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}rpOff(true);autoRestore(0);AUTO.n=0;playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vAll(function(g){if(g==='b'){vca.gain.cancelScheduledValues(t);gateOff(t)}else yOff(t)})}queue=[];playStep=-1;playB=-1;playY=-1;cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
 function audition(st,remote,v){
   if(playing||st.g!==1)return;
   function go(){var t=ctx.currentTime+.01;bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);vca.gain.setTargetAtTime(0,t+.22,.01)}
@@ -2684,7 +2687,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=59; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=60; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2815,7 +2818,7 @@ function hostRx(c,m){
       if(m.g&&!pcan(c,m.g))break;
       if(m.q&&playing){qst.push({c:c,m:m});break} /* envoi d'un cue pendant la lecture : il entrera à la prochaine mesure */
       netApply(m);netSend(m,c);if(m.g)netTo(c,{t:'cq',g:m.g});break;
-    case 'ap':if(m.p)autoP(m.p|0);else autoSet(!!m.on);break; /* un invité allume l'auto live */
+    case 'ap':if(m.once)autoOnce();else if(m.p)autoP(m.p|0);else autoSet(!!m.on);break; /* un invité allume l'auto live */
     case 'rp':if(m.on)rpOn(c,m.n);else if(RP.by===c)rpOff();break; /* un invité maintient le bouton loop */
     case 'cmd':
       if(m.c==='play'){if(!playing)start()}else if(m.c==='pause'){if(playing)stop()}
@@ -3356,47 +3359,57 @@ function permUI(){
 var AUTO={on:false,n:0,P:8,rows:{}};
 function rowHas(r){if(r==='d')return ['A','B'].some(function(v){return D.pat[v].some(function(x){return x.some(function(y){return y})})});return vHasNotes(r.charAt(0),+r.charAt(1))}
 function autoRestore(t){Object.keys(AUTO.rows).forEach(function(r){delete AUTO.rows[r];if(OFFG[r])offNow(r,t)})}
-function autoMute(r,bars){AUTO.rows[r]=AUTO.n+bars;var dl=ctx?Math.max(0,(nextTime-ctx.currentTime)*1000-10):0;
+function autoMute(r,bars,now){AUTO.rows[r]=bar+bars;if(now){setOff(r,true);return}var dl=ctx?Math.max(0,(nextTime-ctx.currentTime)*1000-10):0;
   setTimeout(function(){if(AUTO.on&&AUTO.rows[r]!=null&&!OFFG[r])setOff(r,true)},dl)} /* coupé pile au début de la mesure */
 function autoSet(on){
   if(NET.role==='guest'){netSend({t:'ap',on:on?1:0});return}
   on=!!on;if(AUTO.on===on)return;AUTO.on=on;AUTO.n=0;
-  if(!on)autoRestore(playing?nextTime:0);
+  if(!on)autoRestore(playing?nextTime:0); /* éteint : ce qu'il avait coupé revient à la mesure suivante */
   kmsg(on?'Auto live : une variation toutes les '+AUTO.P+' mesures'+(playing?'':' (lance la lecture)'):'Auto live arrêté');autoUI();save();
 }
 function autoP(p){if([4,8,16].indexOf(p)<0)return;if(NET.role==='guest'){netSend({t:'ap',p:p});return}AUTO.P=p;autoUI();save()}
 function autoBar(){
-  if(!AUTO.on||NET.role==='guest')return;
-  var P=AUTO.P,k=AUTO.n%P,r=Math.random,msg='',x;
-  for(x in AUTO.rows)if(AUTO.n>=AUTO.rows[x]){delete AUTO.rows[x];if(OFFG[x]){offNow(x,nextTime);msg=rname(x)+' revient'}}
+  if(NET.role==='guest')return;
+  var P=AUTO.P,k=AUTO.n%P,r=Math.random,msg='',x,back=false;
+  for(x in AUTO.rows)if(bar>=AUTO.rows[x]){delete AUTO.rows[x];if(OFFG[x]){offNow(x,nextTime);msg=rname(x)+' revient';back=true}}
+  if(!AUTO.on){if(back){kmsg('Auto : '+msg);save()}return}
   if(k===P-1){ /* dernière mesure de la phrase : fill, et parfois un pad pour la suite */
     setFill(true);msg='fill';
     var cand=[];PADG.forEach(function(g){PADS[g].forEach(function(d,i){if(!d)return;var same=false;try{same=padSlotKey(g,d)===padCur(g)}catch(e){}if(!same)cand.push([g,i])})});
     if(cand.length&&r()<.45){var c=cand[Math.floor(r()*cand.length)];padLaunch(c[0],c[1],PMODE==='seq');msg='fill, puis '+rname(c[0])+' · pad '+(c[1]+1)}
   }
-  if(k===0&&AUTO.n>0){ /* début de phrase : une action */
-    var bs=['b0','b1','b2'].filter(rowHas),ys=['y0','y1','y2'].filter(rowHas),acts=[],h=Math.max(1,P/2);
-    if(rowHas('d')&&!OFFG.d)acts.push(['drop',2]);
-    if(bs.length)acts.push(['bass',1.5]);
-    if(ys.length)acts.push(['synth',1.2]);
-    if(JSON.stringify(D.pat.A)!==JSON.stringify(D.pat.B)&&!D.chain)acts.push(['var',1.5]);
-    acts.push(['rien',1]);
-    var tot=acts.reduce(function(a,b){return a+b[1]},0),u=r()*tot,act='rien';for(var i=0;i<acts.length;i++){u-=acts[i][1];if(u<=0){act=acts[i][0];break}}
-    if(act==='drop'){autoMute('d',h);msg='breakdown : rythmes coupés '+h+' mesure'+(h>1?'s':'')}
-    else if(act==='bass'){var b=bs[Math.floor(r()*bs.length)];if(!OFFG[b]){autoMute(b,h);msg=rname(b)+' coupée '+h+' mesure'+(h>1?'s':'')}}
-    else if(act==='synth'){var y=ys[Math.floor(r()*ys.length)];if(OFFG[y]&&AUTO.rows[y]==null){offNow(y,nextTime);msg=rname(y)+' entre'}else if(!OFFG[y]){autoMute(y,P);msg=rname(y)+' sort pour '+P+' mesures'}}
-    else if(act==='var'){D.v=D.v==='A'?'B':'A';renderDrums();save();msg='rythmes : variation '+D.v}
-  }
+  if(k===0&&AUTO.n>0)msg=autoAct(false)||msg; /* début de phrase : une action */
   AUTO.n++;if(msg)kmsg('Auto : '+msg);autoUI();save();
+}
+/* Une action tirée au sort. now : tout de suite (bouton « 1× »), sinon pile au début de la mesure qui commence. */
+function autoAct(now,noRien){
+  var P=AUTO.P,r=Math.random,msg='',bs=['b0','b1','b2'].filter(rowHas),ys=['y0','y1','y2'].filter(rowHas),acts=[],h=Math.max(1,P/2);
+  if(rowHas('d')&&!OFFG.d)acts.push(['drop',2]);
+  if(bs.some(function(b){return !OFFG[b]}))acts.push(['bass',1.5]);
+  if(ys.length)acts.push(['synth',1.2]);
+  if(JSON.stringify(D.pat.A)!==JSON.stringify(D.pat.B)&&!D.chain)acts.push(['var',1.5]);
+  if(!noRien||!acts.length)acts.push(['rien',1]);
+  var tot=acts.reduce(function(a,b){return a+b[1]},0),u=r()*tot,act='rien';for(var i=0;i<acts.length;i++){u-=acts[i][1];if(u<=0){act=acts[i][0];break}}
+  if(act==='drop'){autoMute('d',h,now);msg='breakdown : rythmes coupés '+h+' mesure'+(h>1?'s':'')}
+  else if(act==='bass'){var ok=bs.filter(function(b){return !OFFG[b]}),b=ok[Math.floor(r()*ok.length)];autoMute(b,h,now);msg=rname(b)+' coupée '+h+' mesure'+(h>1?'s':'')}
+  else if(act==='synth'){var y=ys[Math.floor(r()*ys.length)];if(OFFG[y]&&AUTO.rows[y]==null){offNow(y,now?0:nextTime);msg=rname(y)+' entre'}else if(!OFFG[y]){autoMute(y,P,now);msg=rname(y)+' sort pour '+P+' mesures'}}
+  else if(act==='var'){D.v=D.v==='A'?'B':'A';renderDrums();save();msg='rythmes : variation '+D.v}
+  return msg;
+}
+/* bouton « 1× » : une variation tout de suite, et un fill pour finir la mesure */
+function autoOnce(){
+  if(NET.role==='guest'){netSend({t:'ap',once:1});return}
+  if(!playing){kmsg('Lance la lecture pour jouer une variation');return}
+  var msg=autoAct(true,true);setFill(true);kmsg('Auto 1× : '+(msg||'fill'));save();
 }
 function autoUI(){
   var b=$('k-auto');if(!b)return;var k=AUTO.n%AUTO.P;
   b.setAttribute('aria-pressed',AUTO.on?'true':'false');
-  b.textContent=AUTO.on?'✦ AUTO LIVE · '+(playing?'mesure '+(k+1)+'/'+AUTO.P:'en attente de lecture'):'✦ AUTO LIVE';
+  b.textContent=AUTO.on?'✦ AUTO · '+(playing?(k+1)+'/'+AUTO.P:'attente'):'✦ AUTO LIVE';
   b.classList.toggle('beat',AUTO.on&&playing&&k===0);
   [4,8,16].forEach(function(p){$('k-ap'+p).setAttribute('aria-pressed',AUTO.P===p?'true':'false')});
 }
-$('k-auto').onclick=function(){autoSet(!AUTO.on)};
+$('k-auto').onclick=function(){autoSet(!AUTO.on)};$('k-auto1').onclick=autoOnce;
 [4,8,16].forEach(function(p){$('k-ap'+p).onclick=function(){autoP(p)}});
 /* ----- LOOP (répétition des 3 derniers pas, façon « beat repeat ») -----
    Un petit processeur audio garde en permanence les 16 dernières secondes de la sortie du master. Tant que le bouton est
