@@ -849,14 +849,35 @@ html.fsl,html.fsl body{overflow:hidden}
       <select class="sel" id="d-inst"></select>
     </div>
     <div class="steps" id="pads"></div>
-    <div class="actions">
-      <select class="sel" id="d-style" aria-label="Style de batterie">
-        <option value="techno">Techno</option><option value="acid">Acid house</option><option value="electro">Electro</option><option value="break">Breakbeat</option><option value="core">Acidcore</option>
-      </select>
-      <button class="btn primary" id="d-gen">Générer les rythmes</button>
-      <button class="btn" id="d-clrt">Effacer la piste</button>
-      <button class="btn" id="d-clr">Effacer tout</button>
-    </div>
+    <section class="gen">
+      <h2>GÉNÉRATEUR DE RYTHMES</h2>
+      <div class="gengrid">
+        <div class="field"><label class="lbl" for="d-style">Style</label>
+          <select id="d-style">
+            <optgroup label="Électronique"><option value="techno">Techno</option><option value="acid">Acid house</option><option value="house">House</option><option value="electro">Electro</option><option value="break">Breakbeat</option><option value="core">Acidcore</option></optgroup>
+            <optgroup label="Minimale et micro"><option value="min">Minimale</option><option value="micro">Micro</option></optgroup>
+            <optgroup label="Dub, rock, punk"><option value="dub">Dub techno</option><option value="onedrop">Dub one drop</option><option value="rock">Rock</option><option value="punk">Punk</option><option value="dbeat">Punk d-beat</option></optgroup>
+          </select></div>
+        <div class="field"><label class="lbl" for="dg-what">Pistes générées</label>
+          <select id="dg-what"><option value="all">Toutes</option><option value="keepk">Toutes sauf le kick</option><option value="top">Charleys et percus seulement</option></select></div>
+        <div class="field"><label class="lbl" for="dg-var">Variations</label>
+          <select id="dg-var"><option value="one">Celle affichée (A ou B)</option><option value="ab">A et B (B finit par un fill)</option></select></div>
+        <div class="field"><label class="lbl" for="dg-dens"><span>Densité</span><output id="dg-dens-o"></output></label>
+          <input type="range" id="dg-dens" min="0" max="100" value="50"></div>
+        <div class="field"><label class="lbl" for="dg-acc"><span>Accents</span><output id="dg-acc-o"></output></label>
+          <input type="range" id="dg-acc" min="0" max="100" value="50"></div>
+        <div class="field"><label class="lbl" for="dg-gho"><span>Notes fantômes</span><output id="dg-gho-o"></output></label>
+          <input type="range" id="dg-gho" min="0" max="60" value="0"></div>
+        <div class="field"><label class="lbl" for="dg-perc"><span>Percus en plus</span><output id="dg-perc-o"></output></label>
+          <input type="range" id="dg-perc" min="0" max="60" value="0"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="d-gen">Générer les rythmes</button>
+        <button class="btn" id="d-mut">Varier 3 pas</button>
+        <button class="btn" id="d-clrt">Effacer la piste</button>
+        <button class="btn" id="d-clr">Effacer tout</button>
+      </div>
+    </section>
   </section>
 </main>
 <div id="reqbar" role="status" hidden><span id="reqbar-t"></span><button class="btn" id="reqbar-go">Répondre</button></div>
@@ -980,7 +1001,7 @@ function relTau(v){return .005+v*v*.4}    /* constante de temps de la retombée 
 try{var sv=JSON.parse(localStorage.getItem('acidline16')||'null');
   if(sv&&Array.isArray(sv.pat)&&(sv.pat.length===16||sv.pat.length===32)){pat=sv.pat;if(sv.BL===16||sv.BL===32)BL=sv.BL;
     if(sv.P)for(var k in P)if(typeof sv.P[k]==='number')P[k]=sv.P[k];
-    if(sv.wave)wave=sv.wave;if(sv.D&&sv.D.pat&&sv.D.pat.A&&sv.D.pat.A.length===8&&sv.D.pat.B&&sv.D.pat.B.length===8&&sv.D.lv)D=sv.D;if(sv.Y&&Array.isArray(sv.Y.pat)&&sv.Y.pat.length===32)Y=sv.Y;if(sv.L&&Array.isArray(sv.L.slots)&&sv.L.slots.length>=3)L=sv.L;if(sv.B&&sv.B.ftype&&sv.B.lfoT)B=sv.B; var savedGen=sv.gen,savedYGen=sv.ygen;}
+    if(sv.wave)wave=sv.wave;if(sv.D&&sv.D.pat&&sv.D.pat.A&&sv.D.pat.A.length===8&&sv.D.pat.B&&sv.D.pat.B.length===8&&sv.D.lv)D=sv.D;if(sv.Y&&Array.isArray(sv.Y.pat)&&sv.Y.pat.length===32)Y=sv.Y;if(sv.L&&Array.isArray(sv.L.slots)&&sv.L.slots.length>=3)L=sv.L;if(sv.B&&sv.B.ftype&&sv.B.lfoT)B=sv.B; var savedGen=sv.gen,savedYGen=sv.ygen,savedDGen=sv.dgen;}
 }catch(e){}
 while(pat.length<32)pat.push(JSON.parse(JSON.stringify(pat[pat.length-16])));
 L.slots=L.slots.slice(0,LN);while(L.slots.length<LN)L.slots.push(lslot());if(!(L.sel>=0&&L.sel<LN))L.sel=0; /* une sauvegarde d'avant n'avait que trois boucles */
@@ -1039,7 +1060,7 @@ function rowOf(g,m){return g==='d'?'d':g+vIdx(m&&m['v'+g],g)}
 var saveT=0;
 function saveNow(){clearTimeout(saveT);saveT=0;if(NET.role==='guest')return; /* on enregistre l'état du master, jamais un cue en préparation */
   inMaster(function(){try{var vs={b:[],y:[]};['b','y'].forEach(function(g){for(var v=0;v<3;v++)vs[g].push(v===VC[g]?null:VS[g][v])});
-    localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),ygen:ygenState(),D:D,Y:Y,L:L,B:B,vs:vs,vc:VC}))}catch(e){}})}
+    localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),ygen:ygenState(),dgen:dgenState(),D:D,Y:Y,L:L,B:B,vs:vs,vc:VC}))}catch(e){}})}
 var cueUT=0;
 function save(){netSync();padKick();if(cueAny()){clearTimeout(cueUT);cueUT=setTimeout(cueUI,80)}if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(saveNow,400)}
 
@@ -1666,8 +1687,10 @@ $('fill').onclick=function(){if(NET.role==='guest')netSend({t:'cmd',c:'fill'});e
 $('d-auto').onchange=function(){D.auto=+this.value;save()};
 $('d-clrt').onclick=function(){D.pat[D.v][D.sel]=emptyPat()[0];renderDrums();save()};
 $('d-clr').onclick=function(){D.pat[D.v]=emptyPat();renderDrums();save()};
-$('d-gen').onclick=function(){
-  var p=emptyPat(),r=Math.random,st=$('d-style').value,i;
+/* Pistes : 0 kick · 1 caisse · 2 tom bas · 3 tom haut · 4 rim · 5 clap · 6 charley fermé · 7 charley ouvert. 1 = coup, 2 = accent. */
+function dgenState(){return {style:$('d-style').value,what:$('dg-what').value,vr:$('dg-var').value,dens:+$('dg-dens').value,acc:+$('dg-acc').value,gho:+$('dg-gho').value,perc:+$('dg-perc').value}}
+function dBase(st){
+  var p=emptyPat(),r=Math.random,i;
   if(st==='techno'){put(p,0,[4,8,12]);put(p,0,[0],2);put(p,7,[2,6,10,14]);put(p,5,[4,12]);
     for(i=0;i<16;i++)if(i%4!==2&&r()<.7)p[6][i]=r()<.25?2:1;
     for(i=1;i<16;i+=2)if(r()<.2)p[4][i]=1;
@@ -1675,15 +1698,73 @@ $('d-gen').onclick=function(){
   else if(st==='acid'){put(p,0,[0,4,8,12]);put(p,5,[4,12]);put(p,7,[2,6,10,14]);
     for(i=0;i<16;i++)if(i%4!==2)p[6][i]=i%4===0?2:1;
     if(r()<.5)p[1][15]=1;if(r()<.4)p[0][14]=1;if(r()<.4)p[4][r()<.5?7:11]=1}
+  else if(st==='house'){put(p,0,[0,4,8,12]);put(p,5,[4,12],2);put(p,7,[2,6,10,14]);
+    for(i=1;i<16;i+=2)if(r()<.5)p[6][i]=1;if(r()<.4)p[4][r()<.5?7:15]=1;if(r()<.3)p[5][r()<.5?11:15]=1}
   else if(st==='electro'){put(p,0,[0,6,10]);if(r()<.5)p[0][3]=1;put(p,1,[4,12],2);
     put(p,6,[0,2,4,6,8,10,12]);put(p,7,[14]);for(i=1;i<16;i+=2)if(r()<.15)p[4][i]=1;if(r()<.4)p[5][12]=1}
   else if(st==='core'){put(p,0,[0,4,8,12],2);put(p,7,[2,6,10,14],2);put(p,5,[4,12]);
     for(i=0;i<16;i++)if(i%4!==2)p[6][i]=1;
     if(r()<.6){p[0][14]=1;p[0][15]=1}if(r()<.35)p[0][10]=1;if(r()<.5)p[1][15]=2;if(r()<.4)p[4][r()<.5?3:11]=1}
+  else if(st==='min'){ /* minimale : kick droit, peu d'éléments, rim décalé, charley ouvert léger */
+    put(p,0,[0,4,8,12]);put(p,7,[2,6,10,14]);
+    var rp=[[3,10],[6,11],[7,13],[3,6,14]][Math.floor(r()*4)];put(p,4,rp);
+    if(r()<.5)p[5][12]=1;for(i=1;i<16;i+=2)if(r()<.25)p[6][i]=1}
+  else if(st==='micro'){ /* micro : kick qui saute parfois, clap doublé, petits clics partout */
+    put(p,0,[0,4,8]);if(r()<.6)p[0][12]=1;else p[0][14]=1;if(r()<.4)p[0][r()<.5?7:11]=1;
+    put(p,5,[4,12],2);if(r()<.5)p[5][r()<.5?3:13]=1;
+    for(i=0;i<16;i++)if(i%4!==0&&r()<.5)p[6][i]=1;
+    for(i=1;i<16;i+=2)if(r()<.35)p[4][i]=1;if(r()<.5)p[2][r()<.5?5:9]=1;if(r()<.3)p[7][14]=1}
+  else if(st==='dub'){ /* dub techno : kick droit, charley ouvert à contretemps, rim qui s'écho */
+    put(p,0,[0,4,8,12]);put(p,7,[2,6,10,14]);put(p,4,[6,14]);if(r()<.5)p[4][11]=1;
+    for(i=0;i<16;i+=2)if(i%4&&r()<.3)p[6][i]=1;if(r()<.4)p[5][12]=1}
+  else if(st==='onedrop'){ /* one drop : kick et caisse ensemble sur le 3e temps, charley en croches */
+    put(p,0,[8],2);put(p,4,[8],2);put(p,6,[0,2,4,6,8,10,12,14]);if(r()<.5)p[7][14]=1;if(r()<.4)p[4][r()<.5?4:12]=1;if(r()<.3)p[2][15]=1}
+  else if(st==='rock'){ /* rock : kick 1 et 3, caisse 2 et 4, charley en croches */
+    put(p,0,[0,8]);if(r()<.6)p[0][r()<.5?10:6]=1;if(r()<.3)p[0][3]=1;put(p,1,[4,12],2);
+    for(i=0;i<16;i+=2)p[6][i]=i%4===0?2:1;if(r()<.4)p[7][14]=1}
+  else if(st==='punk'){ /* punk : caisse sur chaque contretemps (skank), kick sur les temps */
+    put(p,0,[0,4,8,12]);put(p,1,[2,6,10,14],2);for(i=0;i<16;i+=2)p[6][i]=1;if(r()<.4)p[7][0]=2}
+  else if(st==='dbeat'){ /* d-beat : kick 1, 2-et, 3, 4-et ; caisse 2 et 4 */
+    put(p,0,[0,6,8,14]);put(p,1,[4,12],2);for(i=0;i<16;i+=2)p[7][i]=i%4===0?2:1}
   else{put(p,0,[0,10]);p[0][r()<.5?3:7]=1;put(p,1,[4,12],2);p[1][r()<.5?7:9]=1;if(r()<.6)p[1][15]=1;
     put(p,6,[0,2,4,8,10,12,14]);put(p,7,[6]);if(r()<.4)p[3][13]=1;if(r()<.4)p[2][14]=1}
-  D.pat[D.v]=p;renderDrums();save();toast('Rythme généré sur la variation '+D.v+'.');
+  return p;
+}
+/* Les réglages : 50 % de densité et d'accents = le style tel quel. */
+function dShape(p,g){
+  var r=Math.random,i,k;
+  if(g.dens<50){var q=(50-g.dens)/50;[6,7,4,2,3,5].forEach(function(k){for(var i=0;i<16;i++)if(p[k][i]&&i%4!==0&&r()<q)p[k][i]=0})}
+  else if(g.dens>50){var q2=(g.dens-50)/50;for(i=0;i<16;i++)if(!p[6][i]&&!p[7][i]&&r()<q2*(i%2?.6:.85))p[6][i]=1;for(i=1;i<16;i+=2)if(!p[0][i]&&r()<q2*.12)p[0][i]=1}
+  if(g.acc<50){var qa=(50-g.acc)/50;for(k=0;k<8;k++)for(i=0;i<16;i++)if(p[k][i]===2&&r()<qa)p[k][i]=1}
+  else if(g.acc>50){var qb=(g.acc-50)/50;[0,1,5,6,7].forEach(function(k){for(var i=0;i<16;i++)if(p[k][i]===1&&r()<qb*(i%4===0?.9:.3))p[k][i]=2})}
+  if(g.gho>0)for(i=0;i<16;i++)if(!p[1][i]&&!p[5][i]&&i%4!==0&&r()*100<g.gho*.6)p[1][i]=1; /* petites notes de caisse, non accentuées */
+  if(g.perc>0)[2,3,4].forEach(function(k){for(var i=1;i<16;i+=2)if(!p[k][i]&&r()*100<g.perc*(k===4?.5:.25))p[k][i]=1});
+  return p;
+}
+/* B : la même base, deux charleys changés et un fill sur le dernier temps. */
+function dFill(p){
+  var b=JSON.parse(JSON.stringify(p)),r=Math.random,i,f=[[1,1,1,1],[1,1,2,3],[3,2,2,1],[5,1,5,1]][Math.floor(r()*4)];
+  for(var j=0;j<2;j++){i=4+Math.floor(r()*8);b[6][i]=b[6][i]?0:1}
+  for(i=12;i<16;i++){[1,2,3,5].forEach(function(k){b[k][i]=0});b[f[i-12]][i]=i===15?2:1}
+  return b;
+}
+$('d-gen').onclick=function(){
+  var g=dgenState(),cp=function(o){return JSON.parse(JSON.stringify(o))};
+  function keep(p,base){if(g.what==='keepk')p[0]=cp(base[0]);else if(g.what==='top')[0,1,2,3,5].forEach(function(k){p[k]=cp(base[k])});return p}
+  var p=dShape(dBase(g.style),g);
+  if(g.vr==='ab'){var b=dFill(p);D.pat.A=keep(p,D.pat.A);D.pat.B=keep(b,D.pat.B)}
+  else D.pat[D.v]=keep(p,D.pat[D.v]);
+  renderDrums();save();toast(g.vr==='ab'?'Rythme généré sur A et B.':'Rythme généré sur la variation '+D.v+'.');
 };
+$('d-mut').onclick=function(){
+  var p=D.pat[D.v],r=Math.random,rows=[1,4,5,6,6,7,2,3],ids=[];
+  while(ids.length<3){var k=rows[Math.floor(r()*rows.length)],i=Math.floor(r()*16),id=k+':'+i;if(i%4===0&&k<2)continue;if(ids.indexOf(id)<0){ids.push(id);p[k][i]=p[k][i]?0:1}}
+  renderDrums();save();toast('3 pas changés sur la variation '+D.v+'.');
+};
+['dens','acc','gho','perc'].forEach(function(k){var el=$('dg-'+k),o=$('dg-'+k+'-o');function u(){o.textContent=(k==='dens'||k==='acc')&&+el.value===50?'selon le style':el.value+' %'}el.addEventListener('input',function(){u();save()});u()});
+$('d-style').onchange=$('dg-what').onchange=$('dg-var').onchange=save;
+if(typeof savedDGen==='object'&&savedDGen){[['style','d-style'],['what','dg-what'],['vr','dg-var'],['dens','dg-dens'],['acc','dg-acc'],['gho','dg-gho'],['perc','dg-perc']].forEach(function(o){if(savedDGen[o[0]]!=null)$(o[1]).value=savedDGen[o[0]]});
+  if($('d-style').selectedIndex<0)$('d-style').value='techno';['dens','acc','gho','perc'].forEach(function(k){$('dg-'+k).dispatchEvent(new Event('input'))})}
 
 /* ---------- synthé lead ---------- */
 var yA,yB,ymx,yf,yvca,ygain,ysd,ysr,yGate=false,playY=-1,yStepEls=[],yKeyEls=[];
@@ -1868,7 +1949,17 @@ var BP={
   urubber:{g:'Micro',n:'Basse élastique',w:'triangle',f:'lowpass',l:'pitch',k:bset([.35,.3,.5,.15,.5,0,.3,.05,.15,.6,.6,.08,.1,0])},
   uwood:  {g:'Micro',n:'Basse bois (passe-bande)',w:'square',f:'bandpass',l:'cut',k:bset([.5,.85,.45,.1,.35,0,.18,.03,.6,.25,.4,0,.2,.1])},
   ufunk:  {g:'Micro',n:'Micro funk',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.38,.5,.55,.12,.65,0,.25,.04,.15,.45,.4,0,.1,0])},
-  udust:  {g:'Micro',n:'Poussière (passe-haut + sub)',w:'sawtooth',f:'highpass',l:'cut',k:bset([.25,.4,.5,.06,.3,0,.12,.03,.3,.6,.75,.15,.25,.15])}
+  udust:  {g:'Micro',n:'Poussière (passe-haut + sub)',w:'sawtooth',f:'highpass',l:'cut',k:bset([.25,.4,.5,.06,.3,0,.12,.03,.3,.6,.75,.15,.25,.15])},
+  dbdeep: {g:'Dub',n:'Basse dub profonde',w:'triangle',f:'lowpass',l:'cut',k:bset([.22,.1,.1,.4,.2,.05,.9,.2,.05,1,.4,0,.05,0])},
+  dbstep: {g:'Dub',n:'Steppers',w:'triangle',f:'lowpass',l:'cut',k:bset([.28,.15,.2,.3,.3,0,.75,.12,.1,.9,.4,0,0,0])},
+  dbecho: {g:'Dub',n:'Basse dub en écho',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.3,.35,.3,.35,.35,0,.6,.1,.15,.6,.4,0,.5,.25])},
+  dbtech: {g:'Dub',n:'Dub techno filtrée',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.3,.5,.25,.5,.3,0,.8,.15,.15,.5,.1,.45,.3,.3])},
+  rkpick: {g:'Rock',n:'Basse au médiator',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.55,.25,.45,.15,.5,0,.55,.08,.45,.3,.4,0,0,.05])},
+  rkfing: {g:'Rock',n:'Basse aux doigts',w:'triangle',f:'lowpass',l:'cut',k:bset([.45,.15,.3,.25,.3,.02,.7,.12,.2,.4,.4,0,0,.05])},
+  rkfuzz: {g:'Rock',n:'Fuzz',w:'square',f:'lowpass',l:'cut',k:bset([.6,.3,.4,.3,.5,0,.7,.1,.85,.3,.4,0,0,.05])},
+  pkdrive:{g:'Punk',n:'Punk saturée',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.65,.3,.5,.2,.6,0,.6,.06,.95,.3,.4,0,0,0])},
+  pkgar:  {g:'Punk',n:'Garage (passe-bande)',w:'square',f:'bandpass',l:'cut',k:bset([.58,.75,.45,.15,.5,0,.5,.05,.85,.25,.4,0,.05,.1])},
+  pkbuzz: {g:'Punk',n:'Buzz en croches',w:'sawtooth',f:'lowpass',l:'cut',k:bset([.7,.2,.6,.1,.7,0,.35,.04,.8,.4,.4,0,0,0])}
 };
 function fillPresets(sel,set){
   var o=document.createElement('option');o.value='';o.textContent='Réglage perso';sel.appendChild(o);var groups={};
@@ -1924,7 +2015,17 @@ var YP={
   uvoc:   {g:'Micro',n:'Voix hachée (passe-bande)',w:'sawtooth',f:'bandpass',l:'cut',c:'off',k:kset([.5,.2,.6,.8,.3,0,.18,.15,.1,0,.35,.3,.5,0,.15,.4,0,.55])},
   uglitch:{g:'Micro',n:'Glitch court',w:'square',f:'highpass',l:'pitch',c:'off',k:kset([.75,.05,.6,.5,.8,0,.05,0,.05,0,.4,.2,1,0,.2,.9,.3,.2])},
   umarimba:{g:'Micro',n:'Marimba',w:'sine',f:'lowpass',l:'cut',c:'off',k:kset([.5,0,.6,0,.4,0,.2,0,.2,0,.25,.3,1,0,0,.4,0,0])},
-  usus:   {g:'Micro',n:'Accord sus4 pluck',w:'triangle',f:'lowpass',l:'cut',c:'sus',k:kset([.5,.2,.5,.2,.4,0,.3,.05,.3,0,.45,.4,.5,0,0,.4,0,0])}
+  usus:   {g:'Micro',n:'Accord sus4 pluck',w:'triangle',f:'lowpass',l:'cut',c:'sus',k:kset([.5,.2,.5,.2,.4,0,.3,.05,.3,0,.45,.4,.5,0,0,.4,0,0])},
+  dbskank:{g:'Dub',n:'Skank (accord à contretemps)',w:'square',f:'lowpass',l:'cut',c:'min',k:kset([.5,.15,.45,.3,.4,0,.15,0,.15,0,.65,.45,.5,0,0,.4,0,.1])},
+  dbsiren:{g:'Dub',n:'Sirène dub',w:'sine',f:'lowpass',l:'pitch',c:'off',k:kset([.5,0,.8,.2,0,.02,.9,1,.4,.6,.7,.5,.5,0,0,.55,.85,.1])},
+  dbmelo: {g:'Dub',n:'Mélodica',w:'square',f:'lowpass',l:'pitch',c:'off',k:kset([.5,.1,.55,.2,.2,.05,.6,.7,.3,.15,.5,.4,.5,0,.08,.6,.12,0])},
+  dbpad:  {g:'Dub',n:'Nappe dub techno (min 7)',w:'sawtooth',f:'lowpass',l:'cut',c:'m7',k:kset([.5,.35,.3,.45,.25,.3,.7,.6,.6,0,.6,.7,.5,0,.05,.1,.4,0])},
+  rkgtr:  {g:'Rock',n:'Guitare saturée (quinte)',w:'sawtooth',f:'lowpass',l:'cut',c:'5',k:kset([.5,.25,.6,.3,.3,0,.6,.7,.25,0,.15,.25,.5,0,.05,.4,0,.85])},
+  rkorg:  {g:'Rock',n:'Orgue rock',w:'square',f:'lowpass',l:'pitch',c:'off',k:kset([.5,.1,.65,.1,.1,.01,.6,.9,.15,0,.15,.3,1,.3,0,.6,.15,.4])},
+  rklead: {g:'Rock',n:'Lead rock',w:'sawtooth',f:'lowpass',l:'pitch',c:'off',k:kset([.5,.2,.6,.4,.35,.02,.6,.6,.3,.25,.3,.3,.5,0,0,.6,.15,.6])},
+  pkpow:  {g:'Punk',n:'Power chord punk',w:'square',f:'lowpass',l:'cut',c:'5',k:kset([.5,.3,.65,.2,.25,0,.4,.6,.15,0,.05,.1,.5,.3,.1,.4,0,1])},
+  pkstab: {g:'Punk',n:'Stab garage',w:'sawtooth',f:'bandpass',l:'cut',c:'maj',k:kset([.5,.25,.6,.65,.4,0,.25,.2,.15,0,.1,.15,.5,0,.1,.4,0,.85])},
+  pkfb:   {g:'Punk',n:'Larsen',w:'sawtooth',f:'highpass',l:'pitch',c:'off',k:kset([.75,.4,.7,.85,.3,.1,.7,.9,.3,.4,.2,.2,.5,0,.2,.7,.3,.9])}
 };
 fillPresets($('y-preset'),YP);
 $('y-preset').onchange=function(){var n=this.value,p=YP[n];if(!p){Y.preset='';save();return}
@@ -2328,7 +2429,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=48; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=49; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
