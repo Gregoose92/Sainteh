@@ -476,7 +476,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
     </div>
     <div class="kgrid" id="kgrid"></div>
-    <button class="btn kloop" id="k-loop" type="button" aria-pressed="false">⟲ LOOP · maintenir pour répéter les 3 dernières mesures</button>
+    <button class="btn kloop" id="k-loop" type="button" aria-pressed="false">⟲ LOOP · maintenir pour répéter les 3 derniers pas</button>
   </section>
 
   <section class="zone zb">
@@ -2666,7 +2666,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=56; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=57; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3327,9 +3327,9 @@ function permUI(){
    Une case garde tout l'instrument tel qu'il est à l'écran (séquence et réglages, sauf le volume).
    La lancer le met en place sur le master : tout de suite à l'arrêt, au début de la mesure suivante en lecture.
    En session, les pads sont ceux du master ; un invité les lance et les enregistre pour les instruments qui lui sont ouverts. */
-/* ----- LOOP (répétition des 3 dernières mesures) -----
+/* ----- LOOP (répétition des 3 derniers pas, façon « beat repeat ») -----
    Un petit processeur audio garde en permanence les 16 dernières secondes de la sortie du master. Tant que le bouton est
-   maintenu, on rejoue en boucle les trois mesures complètes qui précèdent la mesure en cours, calées sur le temps, et le direct
+   maintenu, on rejoue en boucle les trois pas (doubles croches) complets qui précèdent le pas en cours, calées sur le temps, et le direct
    est coupé ; le séquenceur, lui, continue en silence. Au relâché, le direct revient là où il en est (comme un « slip » de platine). */
 var RP={node:null,ok:false,on:false,want:false,src:null,cb:{},id:0,liveG:null,loopG:null,tap:null,t0:0,by:null};
 function rpInit(){
@@ -3357,9 +3357,9 @@ function rpOn(by){
   if(NET.role==='guest'){if(!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}RP.on=true;netSend({t:'rp',on:1});padUI();return}
   if(!playing||!ctx){kmsg('Le loop répète ce qui joue : lance la lecture d\'abord');return}
   if(!RP.ok){kmsg(RP.fail?'Loop impossible dans ce navigateur'+(RP.err?' ('+RP.err.slice(0,80)+')':''):'Loop en préparation, réessaie dans un instant');rpInit();return}
-  var d=60/bpmOf(P.tempo)/4,br=16*d,now=ctx.currentTime,tB=nextTime-cur*d;if(tB>now+.005)tB-=br; /* début de la mesure en cours */
+  var d=60/bpmOf(P.tempo)/4,br=d,now=ctx.currentTime,tB=nextTime-Math.ceil((nextTime-now)/d-1e-9)*d; /* début du pas en cours */
   var nb=Math.min(3,Math.floor((tB-RP.t0)/br+1e-6));
-  if(nb<1){kmsg('Le loop a besoin d\'au moins une mesure déjà jouée');return}
+  if(nb<1){kmsg('Le loop a besoin d\'au moins un pas déjà joué');return}
   var sr=ctx.sampleRate,a=Math.round((tB-nb*br)*sr),b=Math.round(tB*sr),id=++RP.id;
   RP.on=true;RP.want=true;RP.by=by||null;padUI();
   RP.cb[id]=function(m){
@@ -3371,7 +3371,7 @@ function rpOn(by){
     var src=ctx.createBufferSource(),t0=ctx.currentTime+.015,L=len/sr,off=((t0-tB)%L+L)%L;
     src.buffer=ab;src.loop=true;src.connect(RP.loopG);src.start(t0,off);RP.src=src;RP.ls={t0:t0,off:off,L:L,br:br,nb:nb};rpTick();
     RP.liveG.gain.cancelScheduledValues(t0);RP.liveG.gain.setTargetAtTime(0,t0,.004);RP.loopG.gain.cancelScheduledValues(t0);RP.loopG.gain.setTargetAtTime(1,t0,.004);
-    kmsg('Loop : '+nb+' mesure'+(nb>1?'s':'')+' en boucle');
+    kmsg('Loop : '+nb+' pas en boucle');
   };
   RP.node.port.postMessage({id:id,a:a,b:b});
 }
@@ -3381,13 +3381,13 @@ function rpTick(){
   clearTimeout(rpT);var b=$('k-loop'),z=RP.ls;
   if(!RP.on||!z||!ctx){rpLabel();return}
   var x=((ctx.currentTime-z.t0)+z.off)%z.L,k=Math.max(0,Math.floor(x/z.br));
-  b.textContent='⟲ EN BOUCLE · mesure '+(k+1)+'/'+z.nb+' · relâche pour reprendre';b.classList.toggle('beat',(x%z.br)<.12);
+  b.textContent='⟲ EN BOUCLE · pas '+(k+1)+'/'+z.nb+' · relâche pour reprendre';b.classList.toggle('beat',(x%z.br)<z.br*.4);
   rpT=setTimeout(rpTick,40);
 }
 function rpLabel(){
   var b=$('k-loop');b.classList.remove('beat');
-  if(NET.role==='guest'){b.textContent=RP.on?'⟲ LOOP demandé au master · relâche pour reprendre':'⟲ LOOP · maintenir pour répéter les 3 dernières mesures';return}
-  b.textContent=RP.fail?'⟲ LOOP indisponible dans ce navigateur':RP.on?'⟲ LOOP · préparation…':!playing?'⟲ LOOP · lance la lecture pour l\'utiliser':!RP.ok?'⟲ LOOP · préparation…':'⟲ LOOP · maintenir pour répéter les 3 dernières mesures';
+  if(NET.role==='guest'){b.textContent=RP.on?'⟲ LOOP demandé au master · relâche pour reprendre':'⟲ LOOP · maintenir pour répéter les 3 derniers pas';return}
+  b.textContent=RP.fail?'⟲ LOOP indisponible dans ce navigateur':RP.on?'⟲ LOOP · préparation…':!playing?'⟲ LOOP · lance la lecture pour l\'utiliser':!RP.ok?'⟲ LOOP · préparation…':'⟲ LOOP · maintenir pour répéter les 3 derniers pas';
 }
 function rpOff(quiet){
   if(!RP.on)return;RP.on=false;RP.want=false;RP.by=null;RP.ls=null;
