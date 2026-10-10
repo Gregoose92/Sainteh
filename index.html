@@ -126,6 +126,9 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 
 /* générateur */
 .gen{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
+.kloop{width:100%;max-width:680px;min-height:56px;font-size:14px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
+.kloop[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon);box-shadow:0 0 0 3px color-mix(in srgb,var(--zc) 35%,transparent)}
+.kloop.wait{opacity:.6}
 .stepnav{display:flex;gap:8px}
 .stepnav .btn{flex:1 1 0;min-height:44px}
 .sing{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:10px}
@@ -472,6 +475,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
     </div>
     <div class="kgrid" id="kgrid"></div>
+    <button class="btn kloop" id="k-loop" type="button" aria-pressed="false">⟲ LOOP · maintenir pour répéter les 3 dernières mesures</button>
   </section>
 
   <section class="zone zb">
@@ -1191,7 +1195,7 @@ function initAudio(){
   lg=LK.map(function(){var x=G();x.connect(lbus);return x});
   cbus=G();cbus.connect(mix);csd=G();csr=G();cbus.connect(csd);csd.connect(dly);cbus.connect(csr);csr.connect(conv);
   var og=G(.8),lim=ctx.createWaveShaper();lim.curve=curve(1.6);
-  mix.connect(comp);comp.connect(og);og.connect(lim);lim.connect(analyser);
+  mix.connect(comp);comp.connect(og);og.connect(lim);RP.liveG=G(1);RP.loopG=G(0);lim.connect(RP.liveG);RP.liveG.connect(analyser);RP.loopG.connect(analyser);RP.tap=lim; /* loop : la sortie du master est enregistrée en continu juste avant liveG */
   /* sortie : master et cue en direct, ou en split (master à gauche, cue à droite) */
   outMain=G();analyser.connect(outMain);cueOut=G();dirG=G(1);cueDirG=G(0);splitG=G(0);
   outMain.connect(dirG);dirG.connect(ctx.destination);cueOut.connect(cueDirG);cueDirG.connect(ctx.destination);
@@ -1205,6 +1209,7 @@ function initAudio(){
   zbuf=new Float32Array(256);
   if(cueAny())cueEng();
   applyParams();routeOut();wake();audioState();
+  if(NET.role!=='guest')rpInit();
 }
 function cueEng(){
   if(!ctx||ENG[1])return;
@@ -1345,7 +1350,7 @@ function cueStep(c,b,t){
   inCue(function(){if(CUE.b)schedule(BL===32?(b%2)*16+c:c,c,t);if(CUE.d)drums(c,t);if(CUE.y)ysched(Y.len===32?(b%2)*16+c:c,t)});
 }
 function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;playing=true;vGates();queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
-function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vAll(function(g){if(g==='b'){vca.gain.cancelScheduledValues(t);gateOff(t)}else yOff(t)})}queue=[];playStep=-1;playB=-1;playY=-1;cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
+function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}rpOff(true);playing=false;clearTimeout(timer);if(ctx){var t=ctx.currentTime;vAll(function(g){if(g==='b'){vca.gain.cancelScheduledValues(t);gateOff(t)}else yOff(t)})}queue=[];playStep=-1;playB=-1;playY=-1;cueQuiet();lstopAll();renderY();setPlayUI();renderSteps();drawRoll();renderDrums();netQueued();netPlay()}
 function audition(st,remote,v){
   if(playing||st.g!==1)return;
   function go(){var t=ctx.currentTime+.01;bfq.offset.cancelScheduledValues(t);bfq.offset.setValueAtTime(freq(st),t);trigger(st,t);vca.gain.setTargetAtTime(0,t+.22,.01)}
@@ -1353,7 +1358,7 @@ function audition(st,remote,v){
   if(NET.role==='guest'){netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0,v:VC.b});return}
   initAudio();if(!ctx)return;inMaster(function(){inVoice('b',vIdx(v,'b'),go)});
 }
-function setPlayUI(){['play','cfs-play','lb-play','ly-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
+function setPlayUI(){padKick();['play','cfs-play','lb-play','ly-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
 
 /* ---------- potards ---------- */
 var knobEls={};
@@ -2660,7 +2665,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=54; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=55; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -2790,6 +2795,7 @@ function hostRx(c,m){
       if(m.g&&!pcan(c,m.g))break;
       if(m.q&&playing){qst.push({c:c,m:m});break} /* envoi d'un cue pendant la lecture : il entrera à la prochaine mesure */
       netApply(m);netSend(m,c);if(m.g)netTo(c,{t:'cq',g:m.g});break;
+    case 'rp':if(m.on)rpOn(c);else if(RP.by===c)rpOff();break; /* un invité maintient le bouton loop */
     case 'cmd':
       if(m.c==='play'){if(!playing)start()}else if(m.c==='pause'){if(playing)stop()}
       else if(m.c==='rew')rew();else if(m.c==='fill')setFill(!fillArmed);break;
@@ -2834,6 +2840,7 @@ function hostFile(c,m){
   catch(e){netTo(c,{t:'ms',w:'l',m:'Son reçu illisible'})}
 }
 function dropConn(c){
+  if(RP.by===c)rpOff();
   var i=conns.indexOf(c);if(i<0)return;conns.splice(i,1);
   liveOff('b',c._id);liveOff('y',c._id);for(var id in nfiles)if(nfiles[id].c===c)delete nfiles[id];
   REQ=REQ.filter(function(r){return r.c!==c});reqUI();
@@ -3319,6 +3326,73 @@ function permUI(){
    Une case garde tout l'instrument tel qu'il est à l'écran (séquence et réglages, sauf le volume).
    La lancer le met en place sur le master : tout de suite à l'arrêt, au début de la mesure suivante en lecture.
    En session, les pads sont ceux du master ; un invité les lance et les enregistre pour les instruments qui lui sont ouverts. */
+/* ----- LOOP (répétition des 3 dernières mesures) -----
+   Un petit processeur audio garde en permanence les 16 dernières secondes de la sortie du master. Tant que le bouton est
+   maintenu, on rejoue en boucle les trois mesures complètes qui précèdent la mesure en cours, calées sur le temps, et le direct
+   est coupé ; le séquenceur, lui, continue en silence. Au relâché, le direct revient là où il en est (comme un « slip » de platine). */
+var RP={node:null,ok:false,on:false,want:false,src:null,cb:{},id:0,liveG:null,loopG:null,tap:null,t0:0,by:null};
+function rpInit(){
+  if(RP.node||RP.loading||!ctx||!RP.tap)return;
+  if(!ctx.audioWorklet||!window.AudioWorkletNode){RP.fail=true;return}
+  RP.loading=true;
+  var code="class C extends AudioWorkletProcessor{constructor(o){super();this.n=o.processorOptions.n;this.L=new Float32Array(this.n);this.R=new Float32Array(this.n);this.w=0;this.fill=0;this.end=0;"+
+    "this.port.onmessage=e=>{const m=e.data,end=this.end,have=Math.min(this.fill,this.n),a=Math.max(m.a,end-have),b=Math.min(m.b,end);if(b-a<128){this.port.postMessage({id:m.id,err:1});return}"+
+    "const len=b-a,l=new Float32Array(len),r=new Float32Array(len);for(let i=0;i<len;i++){const k=((this.w-(end-(a+i)))%this.n+this.n)%this.n;l[i]=this.L[k];r[i]=this.R[k]}"+
+    "this.port.postMessage({id:m.id,a:a,l:l,r:r},[l.buffer,r.buffer])}}"+
+    "process(ins){const x=ins[0],q=(x&&x[0])?x[0].length:128,l=x&&x[0],r=x&&(x[1]||x[0]);for(let i=0;i<q;i++){this.L[this.w]=l?l[i]:0;this.R[this.w]=r?r[i]:0;this.w=(this.w+1)%this.n}"+
+    "this.fill+=q;this.end=currentFrame+q;return true}}registerProcessor('lst-cap',C);";
+  function go(){
+    var n=new AudioWorkletNode(ctx,'lst-cap',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:2,channelCountMode:'explicit',processorOptions:{n:Math.round(ctx.sampleRate*16)}});
+    RP.tap.connect(n);var z=ctx.createGain();z.gain.value=0;n.connect(z);z.connect(ctx.destination);
+    n.port.onmessage=function(e){var c=RP.cb[e.data.id];delete RP.cb[e.data.id];if(c)c(e.data)};
+    RP.node=n;RP.ok=true;RP.t0=ctx.currentTime;RP.loading=false;padKick();
+  }
+  var url='';try{url=URL.createObjectURL(new Blob([code],{type:'application/javascript'}))}catch(e){}
+  (url?ctx.audioWorklet.addModule(url):Promise.reject()).catch(function(){return ctx.audioWorklet.addModule('data:application/javascript;charset=utf-8,'+encodeURIComponent(code))})
+    .then(go).catch(function(){RP.fail=true;RP.loading=false;padKick()});
+}
+function rpOn(by){
+  if(RP.on)return;
+  if(NET.role==='guest'){if(!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}RP.on=true;netSend({t:'rp',on:1});padUI();return}
+  if(!playing||!ctx){kmsg('Le loop répète ce qui joue : lance la lecture d\'abord');return}
+  if(!RP.ok){kmsg(RP.fail?'Loop impossible dans ce navigateur':'Loop en préparation, réessaie dans un instant');rpInit();return}
+  var d=60/bpmOf(P.tempo)/4,br=16*d,now=ctx.currentTime,tB=nextTime-cur*d;if(tB>now+.005)tB-=br; /* début de la mesure en cours */
+  var nb=Math.min(3,Math.floor((tB-RP.t0)/br+1e-6));
+  if(nb<1){kmsg('Le loop a besoin d\'au moins une mesure déjà jouée');return}
+  var sr=ctx.sampleRate,a=Math.round((tB-nb*br)*sr),b=Math.round(tB*sr),id=++RP.id;
+  RP.on=true;RP.want=true;RP.by=by||null;padUI();
+  RP.cb[id]=function(m){
+    if(!RP.want||RP.id!==id)return;
+    if(m.err){RP.on=RP.want=false;RP.by=null;padUI();kmsg('Rien à répéter pour le moment');return}
+    var len=m.l.length,ab=ctx.createBuffer(2,len,sr),f=Math.min(96,len>>3),i;
+    for(i=0;i<f;i++){var g=i/f;m.l[i]*=g;m.r[i]*=g;m.l[len-1-i]*=g;m.r[len-1-i]*=g} /* fondu de 2 ms aux raccords */
+    try{ab.copyToChannel(m.l,0);ab.copyToChannel(m.r,1)}catch(e){ab.getChannelData(0).set(m.l);ab.getChannelData(1).set(m.r)}
+    var src=ctx.createBufferSource(),t0=ctx.currentTime+.015,L=len/sr,off=((t0-tB)%L+L)%L;
+    src.buffer=ab;src.loop=true;src.connect(RP.loopG);src.start(t0,off);RP.src=src;
+    RP.liveG.gain.cancelScheduledValues(t0);RP.liveG.gain.setTargetAtTime(0,t0,.004);RP.loopG.gain.cancelScheduledValues(t0);RP.loopG.gain.setTargetAtTime(1,t0,.004);
+    kmsg('Loop : '+nb+' mesure'+(nb>1?'s':'')+' en boucle');
+  };
+  RP.node.port.postMessage({id:id,a:a,b:b});
+}
+function rpOff(quiet){
+  if(!RP.on)return;RP.on=false;RP.want=false;RP.by=null;
+  if(NET.role==='guest'){netSend({t:'rp',on:0});padUI();return}
+  if(ctx&&RP.liveG){var t=ctx.currentTime;RP.liveG.gain.cancelScheduledValues(t);RP.liveG.gain.setTargetAtTime(1,t,.004);RP.loopG.gain.cancelScheduledValues(t);RP.loopG.gain.setTargetAtTime(0,t,.004);
+    if(RP.src){try{RP.src.stop(t+.05)}catch(e){}RP.src=null}}
+  padUI();if(!quiet)kmsg('Loop relâché');
+}
+(function(){
+  var b=$('k-loop'),held=null;
+  function down(e){if(e.button>0)return;e.preventDefault();held=e.pointerId;try{b.setPointerCapture(e.pointerId)}catch(x){}rpOn()}
+  function up(e){if(held===null||(e&&e.pointerId!==held))return;held=null;rpOff()}
+  b.addEventListener('pointerdown',down);b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up);b.addEventListener('lostpointercapture',up);
+  b.addEventListener('contextmenu',function(e){e.preventDefault()});
+  b.addEventListener('keydown',function(e){if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();rpOn()}});
+  b.addEventListener('keyup',function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();rpOff()}});
+  b.addEventListener('click',function(e){e.preventDefault()});
+  window.addEventListener('blur',function(){if(held!==null){held=null;rpOff()}});
+  document.addEventListener('visibilitychange',function(){if(document.hidden&&held!==null){held=null;rpOff()}});
+})();
 var PADG=['b0','b1','b2','y0','y1','y2','d'],PADN=5,PADS={},PADQ={},padArm='',PMODE='full',padT=0,padQT={},kT=0,PVOL={vol:1,yvol:1,dvol:1};
 PADG.forEach(function(g){PADS[g]=[];PADQ[g]=-1;for(var i=0;i<PADN;i++)PADS[g].push(null)}); /* lignes : basse 1-3, synthé 1-3, rythmes */
 try{if(localStorage.getItem('lst-padmode')==='seq')PMODE='seq'}catch(e){}
@@ -3421,6 +3495,7 @@ function padUI(){
     }
   });
   vUI();
+  var kl=$('k-loop');kl.setAttribute('aria-pressed',RP.on?'true':'false');kl.classList.toggle('wait',!playing&&NET.role!=='guest');
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
   LK.forEach(function(k){
