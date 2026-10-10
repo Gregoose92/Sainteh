@@ -126,6 +126,8 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 
 /* générateur */
 .gen{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
+.stepnav{display:flex;gap:8px}
+.stepnav .btn{flex:1 1 0;min-height:44px}
 .sing{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:10px}
 .sing h2{font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;margin:0}
 .sing .chk{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px}
@@ -544,6 +546,7 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn" id="e-sld">Slide</button>
       </div>
     </div>
+    <div class="stepnav"><button class="btn" id="e-prev">◀ Pas précédent</button><button class="btn" id="e-next">Pas suivant ▶</button></div>
     <div class="keys" id="keys"></div>
   </div>
   <div class="editor livebox" id="live-b">
@@ -690,6 +693,7 @@ html.fsl,html.fsl body{overflow:hidden}
         </div>
         <button class="btn" id="ye-acc">Accent</button>
       </div>
+      <div class="stepnav"><button class="btn" id="ye-prev">◀ Pas précédent</button><button class="btn" id="ye-next">Pas suivant ▶</button></div>
       <div class="keys" id="ykeys"></div>
     </div>
     <div class="editor livebox" id="live-y">
@@ -1402,6 +1406,9 @@ NOTE.forEach(function(n,i){var b=document.createElement('button');b.className='k
   b.onclick=function(){var st=pat[sel];st.n=i;st.g=1;audition(st);changed()};
   $('keys').appendChild(b);keyEls.push(b)});
 $('g-note').onclick=function(){pat[sel].g=1;changed()};
+/* pas précédent / suivant : on passe d'un pas à l'autre sans viser la grille, et on entend la note du pas */
+function bStep(d){sel=(sel+d+BL)%BL;audition(pat[sel]);refresh()}
+$('e-prev').onclick=function(){bStep(-1)};$('e-next').onclick=function(){bStep(1)};
 $('g-rest').onclick=function(){pat[sel].g=0;changed()};
 $('g-tie').onclick=function(){pat[sel].g=2;changed()};
 $('o-dn').onclick=function(){pat[sel].o=pat[sel].o===-1?0:-1;audition(pat[sel]);changed()};
@@ -1963,6 +1970,8 @@ function drawYRoll(){
   g.globalAlpha=.9;g.strokeStyle=ink;g.strokeRect(Y.sel*cw+1.5,1.5,cw-3,H-3);g.globalAlpha=1;
 }
 $('yg-note').onclick=function(){Y.pat[Y.sel].g=1;ychanged()};
+function yStep(d){Y.sel=(Y.sel+d+Y.len)%Y.len;ytap(Y.pat[Y.sel]);renderY()}
+$('ye-prev').onclick=function(){yStep(-1)};$('ye-next').onclick=function(){yStep(1)};
 $('yg-rest').onclick=function(){Y.pat[Y.sel].g=0;ychanged()};
 $('yg-tie').onclick=function(){Y.pat[Y.sel].g=2;ychanged()};
 $('yo-dn').onclick=function(){var s=Y.pat[Y.sel];s.o=s.o===-1?0:-1;ytap(s);ychanged()};
@@ -2632,7 +2641,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=52; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=53; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
