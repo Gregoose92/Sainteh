@@ -127,6 +127,11 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 /* générateur */
 .gen{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
 .gtrhide{display:none!important}
+.lrec{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lrecb{min-height:40px;min-width:92px;font-weight:700}
+.lrecb[aria-pressed="true"]{background:#d42a1e;border-color:#d42a1e;color:#fff;animation:recblink 1s steps(2,start) infinite}
+@keyframes recblink{50%{filter:brightness(1.3)}}
+@media (prefers-reduced-motion:reduce){.lrecb[aria-pressed="true"]{animation:none}}
 .kauto{display:flex;align-items:stretch;gap:6px;max-width:680px;flex-wrap:nowrap}
 .kauto .btn{min-height:38px;padding:4px 8px;font-size:12px}
 .kautob{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -590,6 +595,7 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn run kfs-only" id="lb-play" aria-pressed="false">▶ Lecture</button>
         <button class="btn sp" id="lb-fs" aria-pressed="false">Plein écran</button>
       </div>
+      <div class="lrec"><button class="btn lrecb" id="lb-rec" type="button" aria-pressed="false">● REC</button><span class="lbl" id="lb-recst">Enregistre dans la séquence ce que tu joues</span></div>
       <div class="keys live" id="lkeys-b"></div>
       <p class="hint" id="lat-b" role="status"></p>
     </div>
@@ -744,6 +750,7 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn run kfs-only" id="ly-play" aria-pressed="false">▶ Lecture</button>
         <button class="btn sp" id="ly-fs" aria-pressed="false">Plein écran</button>
       </div>
+      <div class="lrec"><button class="btn lrecb" id="ly-rec" type="button" aria-pressed="false">● REC</button><span class="lbl" id="ly-recst">Enregistre dans la séquence ce que tu joues</span></div>
       <div class="keys live" id="lkeys-y"></div>
       <p class="hint" id="lat-y" role="status"></p>
     </div>
@@ -1398,7 +1405,7 @@ function audition(st,remote,v){
   if(NET.role==='guest'){netSend({t:'au',i:'b',n:st.n,o:st.o,a:st.a?1:0,v:VC.b});return}
   initAudio();if(!ctx)return;inMaster(function(){inVoice('b',vIdx(v,'b'),go)});
 }
-function setPlayUI(){padKick();['play','cfs-play','lb-play','ly-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
+function setPlayUI(){padKick();try{if(REC.b)recUI('b');if(REC.y)recUI('y')}catch(e){}['play','cfs-play','lb-play','ly-play'].forEach(function(id){var b=$(id);b.setAttribute('aria-pressed',playing);b.textContent=playing?'⏸ Pause':'▶ Lecture'})}
 
 /* ---------- potards ---------- */
 var knobEls={};
@@ -2544,14 +2551,50 @@ function liveOff(i,src){
     })(v);
   });
 }
+/* ----- REC du clavier live : ce qu'on joue s'écrit dans la séquence de l'onglet ouvert -----
+   En lecture : chaque note va au pas le plus proche de ce qu'on entend (latence de sortie déduite ; chez un invité, d'après
+   les tops envoyés par le master), une touche tenue sur plusieurs pas devient des liaisons, glisser d'une touche à l'autre
+   sans lever le doigt pose un slide (basse). On n'écrit que les pas joués : le reste du pattern ne bouge pas.
+   À l'arrêt : chaque note s'écrit au pas sélectionné, puis on passe au suivant (saisie pas à pas). */
+var REC={b:false,y:false},RH={b:null,y:null},LCK=null;
+function recPos(){
+  if(NET.role==='guest'){if(!LCK||!playing)return null;return LCK.A+(performance.now()-LCK.t)/LCK.d}
+  if(!playing||!ctx)return null;var d=60/bpmOf(P.tempo)/4;return bar*16+cur+((ctx.currentTime-outLat()/1000)-nextTime)/d;
+}
+function recCommit(g){if(g==='b')changed();else ychanged()}
+function recMsg(g,m){$('l'+g+'-recst').textContent=m}
+function recTie(g,h,E){var L=g==='b'?BL:Y.len,P0=g==='b'?pat:Y.pat;for(var A=h.A+1;A<E&&A<h.A+L;A++)P0[((A%L)+L)%L]=S(2,h.n,h.o,false,false)}
+function recNote(g,n,legato){
+  if(!REC[g])return;
+  var oc=g==='b'?(B.lo||0):(Y.lo||0),ac=g==='b'?!!B.lacc:!!Y.lacc,o=Math.max(-1,Math.min(1,oc)),L=g==='b'?BL:Y.len,P0=g==='b'?pat:Y.pat,i;
+  if(!playing){ /* pas à pas */
+    i=g==='b'?sel:Y.sel;P0[i]=S(1,n,o,ac,false);
+    if(g==='b')sel=(sel+1)%BL;else Y.sel=(Y.sel+1)%Y.len;
+    recCommit(g);recMsg(g,'REC pas à pas : '+NOTE[n]+' écrit au pas '+(i+1)+', au suivant');return;
+  }
+  var pos=recPos();if(pos==null)return;var A=Math.round(pos);i=((A%L)+L)%L;
+  var h=RH[g];
+  if(h&&legato){recTie(g,h,A);if(g==='b'&&A>h.A){var pl=((A-1)%L+L)%L;P0[pl].s=true}} /* on glisse d'une note à l'autre */
+  P0[i]=S(1,n,o,ac,false);RH[g]={A:A,n:n,o:o};
+  recCommit(g);recMsg(g,'REC : '+NOTE[n]+' au pas '+(i+1));
+}
+function recOff(g){
+  var h=RH[g];RH[g]=null;if(!h||!REC[g]||!playing)return;
+  var pos=recPos();if(pos==null)return;var E=Math.round(pos);if(E>h.A+1){recTie(g,h,E);recCommit(g)}
+}
+function recUI(g){var b=$('l'+g+'-rec');b.setAttribute('aria-pressed',REC[g]?'true':'false');
+  recMsg(g,REC[g]?(playing?'REC : joue, les notes s\'écrivent au pas le plus proche':'REC pas à pas : chaque note va au pas sélectionné ('+((g==='b'?sel:Y.sel)+1)+'), puis au suivant'):'Enregistre dans la séquence ce que tu joues')}
+['b','y'].forEach(function(g){$('l'+g+'-rec').onclick=function(){REC[g]=!REC[g];RH[g]=null;recUI(g)}});
 liveKb('lkeys-b',function(n,legato){
+  recNote('b',n,legato);
   if(NET.role==='guest'&&!CUE.b){if(liveOK('b'))netSend({t:'nt',i:'b',n:n,lg:legato?1:0,o:B.lo||0,a:B.lacc?1:0,v:VC.b});else liveNo('b');return}
   liveOn('b',n,legato,B.lo||0,B.lacc,'me');
-},function(){if(NET.role==='guest'&&!lhMe(1,'b'))netSend({t:'nt',i:'b',off:1});else liveOff('b','me')});
+},function(){recOff('b');if(NET.role==='guest'&&!lhMe(1,'b'))netSend({t:'nt',i:'b',off:1});else liveOff('b','me')});
 liveKb('lkeys-y',function(n,legato){
+  recNote('y',n,legato);
   if(NET.role==='guest'&&!CUE.y){if(liveOK('y'))netSend({t:'nt',i:'y',n:n,lg:legato?1:0,o:Y.lo||0,a:Y.lacc?1:0,v:VC.y});else liveNo('y');return}
   liveOn('y',n,legato,Y.lo||0,Y.lacc,'me');
-},function(){if(NET.role==='guest'&&!lhMe(1,'y'))netSend({t:'nt',i:'y',off:1});else liveOff('y','me')});
+},function(){recOff('y');if(NET.role==='guest'&&!lhMe(1,'y'))netSend({t:'nt',i:'y',off:1});else liveOff('y','me')});
 function renderLive(){
   [['b',B],['y',Y]].forEach(function(o){var v=o[1].lo||0;$('l'+o[0]+'-ol').textContent='Octave '+(v>0?'+':'')+v;$('l'+o[0]+'-acc').setAttribute('aria-pressed',!!o[1].lacc)});
 }
@@ -2772,7 +2815,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=61; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=62; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=6,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3015,6 +3058,7 @@ function guestRx(m){
       if(fillArmed!==!!m.f){fillArmed=!!m.f;$('fill').setAttribute('aria-pressed',fillArmed)}
       stepEls.forEach(function(e,i){e.d.classList.toggle('on',i===playB)});drawRoll();drumStepUI();yStepUI();break;
     case 'ck': /* un pas du master va sonner dans m.d ms : on joue en même temps, sur cet appareil, les instruments en cue */
+      LCK={A:(m.n|0)*16+(m.i&15),t:performance.now()+(+m.d||0)+(+m.l||0),d:60/bpmOf(P.tempo)/4*1000}; /* repère pour le REC live d'un invité */
       if(!cueAny()||!ctx||!ENG[1]||ctx.state!=='running')break;
       var ci=m.i&15,cn=m.n|0,lead=((+m.d||0)+(+m.l||0)-outLat())/1000;
       bar=cn;cueStep(ci,cn,ctx.currentTime+Math.max(.005,Math.min(.8,lead)));break;
