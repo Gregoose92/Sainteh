@@ -126,6 +126,7 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 
 /* générateur */
 .gen{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
+.gtrhide{display:none!important}
 .kauto{display:flex;align-items:stretch;gap:6px;max-width:680px;flex-wrap:nowrap}
 .kauto .btn{min-height:38px;padding:4px 8px;font-size:12px}
 .kautob{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -656,12 +657,19 @@ html.fsl,html.fsl body{overflow:hidden}
       <button class="btn" id="cue-y-off">Quitter le cue</button>
     </div>
     <div class="edrow">
+      <span class="lbl">Instrument</span>
+      <div class="seg" role="group" aria-label="Instrument de cet onglet">
+        <button class="btn" id="ye-syn">🎹 Synthé</button>
+        <button class="btn" id="ye-gtr">🎸 Guitare électrique</button>
+      </div>
+    </div>
+    <div class="edrow">
       <label class="lbl" for="y-preset">Preset synthé</label>
       <select class="sel psel" id="y-preset"></select>
     </div>
     <div class="knobs" id="yknobs">
       <div class="wave wide">
-        <span class="lbl">Onde</span>
+        <span class="lbl" id="y-wlab">Onde</span>
         <div class="seg" role="group" aria-label="Forme d'onde du synthé">
           <button class="btn" id="y-saw" title="Dent de scie">◣ Saw</button>
           <button class="btn" id="y-sq" title="Carré">⊓ Sq</button>
@@ -671,8 +679,8 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
     </div>
     <div class="edrow">
-      <span class="lbl">Filtre</span>
-      <div class="seg" role="group" aria-label="Type de filtre du synthé">
+      <span class="lbl" id="y-flab">Filtre</span>
+      <div class="seg" id="y-fseg" role="group" aria-label="Type de filtre du synthé">
         <button class="btn" id="yf-lp">Passe-bas</button>
         <button class="btn" id="yf-bp">Passe-bande</button>
         <button class="btn" id="yf-hp">Passe-haut</button>
@@ -744,7 +752,7 @@ html.fsl,html.fsl body{overflow:hidden}
       <div class="gengrid">
         <div class="field"><label class="lbl" for="y-style">Style</label>
           <select id="y-style">
-            <option value="arp">Arpège</option><option value="mel">Mélodie</option><option value="stab">Stabs</option><option value="min">Minimale</option><option value="micro">Micro</option>
+            <option value="arp">Arpège</option><option value="mel">Mélodie</option><option value="stab">Stabs</option><option value="riff">Riff (guitare)</option><option value="min">Minimale</option><option value="micro">Micro</option>
           </select></div>
         <div class="field"><label class="lbl" for="ys-root">Tonique</label>
           <select id="ys-root"><option value="-1">Comme la basse</option></select></div>
@@ -1064,7 +1072,7 @@ while(pat.length<32)pat.push(JSON.parse(JSON.stringify(pat[pat.length-16])));
 L.slots=L.slots.slice(0,LN);while(L.slots.length<LN)L.slots.push(lslot());if(!(L.sel>=0&&L.sel<LN))L.sel=0; /* une sauvegarde d'avant n'avait que trois boucles */
 if(D.kick===undefined)D.kick='classic';
 if(!Array.isArray(D.inst)||D.inst.length!==8||D.inst.some(function(i){return !INS[i]}))D.inst=KITS.classic.slice();
-if(!Y.ftype)Y.ftype='lowpass';if(!Y.lfoT)Y.lfoT='cut';if(!Y.chord)Y.chord='off';if(Y.preset===undefined)Y.preset='';
+if(!Y.ftype)Y.ftype='lowpass';if(!Y.lfoT)Y.lfoT='cut';if(!Y.chord)Y.chord='off';if(Y.preset===undefined)Y.preset='';if(Y.eng!=='gtr')Y.eng='synth';
 /* ----- 3 basses et 3 synthés -----
    L'onglet ouvert (VC) vit dans les variables habituelles (pat, BL, wave, B, Y, P) : tout l'éditeur travaille dessus sans changement.
    Les deux autres attendent dans VS, au même format d'échange que le cue (stSwap). vSwapS échange les deux, le temps de jouer
@@ -1074,7 +1082,7 @@ KN.forEach(function(k){var bx=k.box||'knobs';if(bx==='knobs'&&k.id!=='tempo')VK.
 function vRest(){var a=[];for(var i=0;i<32;i++)a.push(S(0,9,0,0,0));return a}
 var VDEF={b:{p:{},pat:vRest(),BL:16,wave:'sawtooth',ftype:'lowpass',lfoT:'cut',preset:''},y:{p:{},o:omit(JSON.parse(JSON.stringify(Y)),['sel','lo','lacc'])}};
 KN.forEach(function(k){if(VK.b.indexOf(k.id)>=0)VDEF.b.p[k.id]=k.def;if(VK.y.indexOf(k.id)>=0)VDEF.y.p[k.id]=k.def});
-(function(o){o.pat=vRest();o.len=16;o.wave='sawtooth';o.mute=false;o.ftype='lowpass';o.lfoT='cut';o.chord='off';o.preset=''})(VDEF.y.o);
+(function(o){o.pat=vRest();o.len=16;o.wave='sawtooth';o.mute=false;o.ftype='lowpass';o.lfoT='cut';o.chord='off';o.preset='';o.eng='synth'})(VDEF.y.o);
 function vNew(g){return JSON.parse(JSON.stringify(VDEF[g]))}
 function vIdx(x,g){return x===0||x===1||x===2?x:VC[g]}
 function vNorm(g,a){var o=vNew(g),k;if(!a||typeof a!=='object')return o;
@@ -1083,7 +1091,7 @@ function vNorm(g,a){var o=vNew(g),k;if(!a||typeof a!=='object')return o;
     o.ftype=one(a.ftype,['lowpass','bandpass','highpass'],'lowpass');o.lfoT=one(a.lfoT,['cut','pitch'],'cut');o.preset=String(a.preset||'')}
   else if(a.o&&typeof a.o==='object'&&okSteps(a.o.pat)){for(k in o.o)if(a.o[k]!==undefined)o.o[k]=a.o[k];o.o.pat=a.o.pat;o.o.len=a.o.len===32?32:16;
     o.o.wave=one(o.o.wave,['sawtooth','square','triangle','sine'],'sawtooth');o.o.ftype=one(o.o.ftype,['lowpass','bandpass','highpass'],'lowpass');
-    o.o.lfoT=one(o.o.lfoT,['cut','pitch'],'cut');o.o.chord=one(o.o.chord,['off','5','min','maj','m7','sus'],'off');o.o.mute=!!o.o.mute;o.o.preset=String(o.o.preset||'')}
+    o.o.lfoT=one(o.o.lfoT,['cut','pitch'],'cut');o.o.chord=one(o.o.chord,['off','5','min','maj','m7','sus'],'off');o.o.eng=o.o.eng==='gtr'?'gtr':'synth';o.o.mute=!!o.o.mute;o.o.preset=String(o.o.preset||'')}
   return o}
 var VS={b:[vNew('b'),vNew('b'),vNew('b')],y:[vNew('y'),vNew('y'),vNew('y')]};
 try{if(typeof sv!=='undefined'&&sv&&sv.vs&&sv.vc)['b','y'].forEach(function(g){var c=sv.vc[g];if(c===0||c===1||c===2)VC[g]=VN[g]=c;
@@ -1112,7 +1120,8 @@ function inVoice(g,v,fn){
 }
 function vPat(g,v){var a=v===VN[g]?(g==='b'?{p:pat,n:BL}:{p:Y.pat,n:Y.len}):(g==='b'?{p:VS.b[v].pat,n:VS.b[v].BL}:{p:VS.y[v].o.pat,n:VS.y[v].o.len});return a}
 function vHasNotes(g,v){var a=vPat(g,v);for(var i=0;i<a.n;i++)if(a.p[i]&&a.p[i].g)return true;return false}
-function rname(r){return r==='d'?'Rythmes':(r.charAt(0)==='b'?'Basse ':'Synthé ')+(+r.charAt(1)+1)}
+function vEng(v){var o=v===VN.y?Y:(VS.y[v]&&VS.y[v].o)||{};return o.eng==='gtr'?'gtr':'synth'}
+function rname(r){var c=r.charAt(0),v=+r.charAt(1);return r==='d'?'Rythmes':(c==='b'?'Basse ':vEng(v)==='gtr'?'Guitare ':'Synthé ')+(v+1)}
 function rowOf(g,m){return g==='d'?'d':g+vIdx(m&&m['v'+g],g)}
 var saveT=0;
 function saveNow(){clearTimeout(saveT);saveT=0;if(NET.role==='guest')return; /* on enregistre l'état du master, jamais un cue en préparation */
@@ -1169,12 +1178,16 @@ function mkYV(e){
   o.yC=O();o.yD=O();o.ychg=G(0);o.yC.connect(o.ychg);o.yD.connect(o.ychg);o.ychg.connect(o.ymx);
   o.yN=ctx.createBufferSource();o.yN.buffer=noiseBuf;o.yN.loop=true;o.ynz=G(0);o.yN.connect(o.ynz);o.ynz.connect(o.ymx);
   o.ylfo=O();o.ylfoF=G(0);o.ylfoP=G(0);o.ylfo.connect(o.ylfoF);o.ylfoF.connect(o.yf.detune);o.ylfo.connect(o.ylfoP);[o.yA,o.yB,o.yC,o.yD,o.ySub].forEach(function(x){o.ylfoP.connect(x.detune)});
+  /* guitare : cordes pincées (Karplus-Strong, calculées à la demande) → ampli (gain + saturation) → baffle (passe-haut + passe-bas) */
+  o.gIn=G(0);o.gPre=G(1);o.gShp=ctx.createWaveShaper();o.gShp.oversample='2x';o.gHp=ctx.createBiquadFilter();o.gHp.type='highpass';o.gHp.frequency.value=90;
+  o.gCab=ctx.createBiquadFilter();o.gCab.type='lowpass';o.gCab.Q.value=.8;o.gPost=G(.5);o.gAct=[];o.gLD=-1;
+  o.gIn.connect(o.gPre);o.gPre.connect(o.gShp);o.gShp.connect(o.gHp);o.gHp.connect(o.gCab);o.gCab.connect(o.gPost);o.gPost.connect(o.ygain);
   [o.yA,o.yB,o.ySub,o.yC,o.yD,o.yN,o.ylfo].forEach(function(x){x.start()});
   return o;
 }
 function bLoad(o){bfq=o.bfq;osc=o.osc;f1=o.f1;f2=o.f2;vca=o.vca;pre=o.pre;shaper=o.shaper;post=o.post;master=o.master;bSub=o.bSub;bsubg=o.bsubg;blfo=o.blfo;blfoF=o.blfoF;blfoP=o.blfoP;bsd=o.bsd;bsr=o.bsr;
   liveB=o.liveB;gateOpen=o.gateOpen;lastD=o.lastD}
-function yLoad(o){yA=o.yA;yB=o.yB;ymx=o.ymx;yf=o.yf;yvca=o.yvca;ygain=o.ygain;ysd=o.ysd;ysr=o.ysr;ypre=o.ypre;yshp=o.yshp;ySub=o.ySub;ysubg=o.ysubg;yC=o.yC;yD=o.yD;ychg=o.ychg;yN=o.yN;ynz=o.ynz;ylfo=o.ylfo;ylfoF=o.ylfoF;ylfoP=o.ylfoP;
+function yLoad(o){gV=o;yA=o.yA;yB=o.yB;ymx=o.ymx;yf=o.yf;yvca=o.yvca;ygain=o.ygain;ysd=o.ysd;ysr=o.ysr;ypre=o.ypre;yshp=o.yshp;ySub=o.ySub;ysubg=o.ysubg;yC=o.yC;yD=o.yD;ychg=o.ychg;yN=o.yN;ynz=o.ynz;ylfo=o.ylfo;ylfoF=o.ylfoF;ylfoP=o.ylfoP;
   liveY=o.liveY;yGate=o.yGate;lastY=o.lastY}
 function bKeep(o){if(o){o.liveB=liveB;o.gateOpen=gateOpen;o.lastD=lastD}}
 function yKeep(o){if(o){o.liveY=liveY;o.yGate=yGate;o.lastY=lastY}}
@@ -1303,7 +1316,12 @@ function aB(t){
   blfoF.gain.setTargetAtTime(B.lfoT==='cut'?P.blfod*2400:0,t,.02);blfoP.gain.setTargetAtTime(B.lfoT==='pitch'?P.blfod*60:0,t,.02);
   bsd.gain.setTargetAtTime(P.bdly*.6,t,.02);bsr.gain.setTargetAtTime(P.brev*.7,t,.02);
 }
+function gCabHz(v){return 700*Math.pow(2,v*3.3)}
 function aY(t){
+  if(gV){var gt=Y.eng==='gtr';gV.gIn.gain.setTargetAtTime(gt?1:0,t,.01);
+    if(gt){yvca.gain.cancelScheduledValues(t);yvca.gain.setTargetAtTime(0,t,.01);
+      gV.gPre.gain.setTargetAtTime(1+P.ydrv*40,t,.02);if(gV.gLD!==P.ydrv){gV.gLD=P.ydrv;gV.gShp.curve=curve(1+P.ydrv*5)}
+      gV.gCab.frequency.setTargetAtTime(gCabHz(P.ycut),t,.02);gV.gPost.gain.setTargetAtTime(1/(1+P.ydrv*1.2),t,.02)}}
   yA.type=yB.type=yC.type=yD.type=Y.wave;yf.type=Y.ftype;
   yA.detune.setTargetAtTime(-P.ydet*25,t,.02);yB.detune.setTargetAtTime(P.ydet*25,t,.02);yC.detune.setTargetAtTime(-P.ydet*12,t,.02);yD.detune.setTargetAtTime(P.ydet*12,t,.02);
   var chOn=Y.chord!=='off';ymx.gain.setTargetAtTime(chOn?.32:.5,t,.02);ychg.gain.setTargetAtTime(chOn?.8:0,t,.02);
@@ -1311,7 +1329,7 @@ function aY(t){
   ylfo.frequency.setTargetAtTime(ylfoHz(P.ylfor),t,.02);ylfoF.gain.setTargetAtTime(Y.lfoT==='cut'?P.ylfod*2400:0,t,.02);ylfoP.gain.setTargetAtTime(Y.lfoT==='pitch'?P.ylfod*60:0,t,.02);
   ypre.gain.setTargetAtTime(1+P.ydrv*12,t,.02);if(lastY!==P.ydrv){lastY=P.ydrv;yshp.curve=curve(1+P.ydrv*3)}
   if(!playing)yf.frequency.setTargetAtTime(ycutHz(P.ycut),t,.02);
-  yf.Q.setTargetAtTime(P.yres*18,t,.02);plvl(ygain.gain,'y'+VN.y,P.yvol*.6/(1+P.ydrv*.8),t);ysd.gain.setTargetAtTime(P.ydly*.6,t,.02);ysr.gain.setTargetAtTime(P.yrev*.7,t,.02);
+  yf.Q.setTargetAtTime(P.yres*18,t,.02);plvl(ygain.gain,'y'+VN.y,P.yvol*.6/(Y.eng==='gtr'?1:1+P.ydrv*.8),t);ysd.gain.setTargetAtTime(P.ydly*.6,t,.02);ysr.gain.setTargetAtTime(P.yrev*.7,t,.02);
 }
 function apply0(){
   var t=ctx.currentTime;
@@ -1946,7 +1964,40 @@ function ytrig(st,t){
   yvca.gain.cancelScheduledValues(t);yvca.gain.setTargetAtTime(peak,t,atk/3);yvca.gain.setTargetAtTime(peak*P.ysus,t+atk,dtau);
   yf.frequency.cancelScheduledValues(t);yf.frequency.setTargetAtTime(pk,t,Math.max(atk/3,.003));yf.frequency.setTargetAtTime(base,t+atk,dtau);
 }
-function yOff(t){yvca.gain.cancelScheduledValues(t);yvca.gain.setTargetAtTime(0,t,relTau(P.yrel));yGate=false}
+function yOff(t){yvca.gain.cancelScheduledValues(t);yvca.gain.setTargetAtTime(0,t,relTau(P.yrel));yGate=false;if(gV&&gV.gAct.length)gOff(t)}
+/* ----- guitare électrique -----
+   Une corde = un tampon calculé une fois (Karplus-Strong : un bruit filtré qui tourne dans une boucle de la longueur de la note,
+   en s'adoucissant à chaque tour), gardé en mémoire et rejoué à la bonne hauteur. Accords = plusieurs cordes, grattées avec un
+   léger décalage. Une nouvelle note étouffe la précédente, comme sur une vraie guitare. */
+var gV=null,KSC={},KSN=0;
+function ksBuf(midi,dec,br){
+  var key=midi+'|'+Math.round(dec*20)+'|'+br;if(KSC[key])return KSC[key];
+  if(KSN>160){KSC={};KSN=0}
+  var sr=ctx.sampleRate,f=440*Math.pow(2,(midi-69)/12),L=Math.max(2,Math.floor(sr/f-.5)),t60=.2+dec*dec*6,N=Math.round(sr*Math.min(4.5,t60*1.1)+L);
+  var b=ctx.createBuffer(1,N,sr),x=b.getChannelData(0),line=new Float32Array(L),i,lp=0,a=[.15,.3,.55,.85][br],m=0,pk=0,idx=0;
+  for(i=0;i<L;i++){lp+=a*((Math.random()*2-1)-lp);line[i]=lp;m+=lp}m/=L;for(i=0;i<L;i++)line[i]-=m;
+  var rho=Math.pow(10,-3*L/(t60*sr));
+  for(i=0;i<N;i++){var c=line[idx],j=idx+1<L?idx+1:0;x[i]=c;line[idx]=rho*.5*(c+line[j]);idx=j}
+  for(i=0;i<Math.min(N,L*4);i++)pk=Math.max(pk,Math.abs(x[i]));if(pk>0){var gk=.8/pk;for(i=0;i<N;i++)x[i]*=gk}
+  b._f0=sr/(L+.5);KSC[key]=b;KSN++;return b;
+}
+function gOff(t,tau){
+  if(!gV||!gV.gAct.length)return;var tt=tau||(.01+relTau(P.yrel)*.5);
+  gV.gAct.forEach(function(o){try{o.g.gain.cancelScheduledValues(t);o.g.gain.setTargetAtTime(0,t,tt)}catch(e){}try{o.s.stop(t+tt*8+.05)}catch(e){}});gV.gAct=[];
+}
+function gPluck(st,t){
+  if(!gV)return;gOff(t,.012); /* la note d'avant est étouffée */
+  var vo=gV,lfo=ylfoP,f=yfreq(st),m0=69+12*Math.log(f/440)/Math.LN2,ch=YCH[Y.chord]||YCH.off,iv=Y.chord==='off'?[0]:[0,ch[0],ch[1]];
+  var br={sine:0,triangle:1,square:2,sawtooth:3}[Y.wave],strum=P.ydet*.035,vel=st.a?1:.72;if(br==null)br=3;
+  iv.forEach(function(s,k){
+    var mm=m0+s,buf=ksBuf(Math.round(mm),P.ydec,br),src=ctx.createBufferSource(),g=ctx.createGain(),tk=t+k*strum,o={s:src,g:g};
+    src.buffer=buf;src.playbackRate.value=440*Math.pow(2,(mm-69)/12)/buf._f0;try{lfo.connect(src.detune)}catch(e){} /* LFO hauteur = vibrato */
+    g.gain.value=vel*(k?.85:1)/Math.sqrt(iv.length);src.connect(g);g.connect(vo.gIn);src.start(tk);try{src.stop(tk+buf.duration)}catch(e){}
+    src.onended=function(){var i=vo.gAct.indexOf(o);if(i>=0)vo.gAct.splice(i,1);try{lfo.disconnect(src.detune)}catch(e){}try{g.disconnect()}catch(e){}};
+    vo.gAct.push(o);
+  });
+}
+function gLen(dur){return dur*(.35+P.ysus*2.5)} /* durée tenue d'une note de guitare (potard Longueur) */
 var ySub,ysubg,yC,yD,ychg,yN,ynz,ylfo,ylfoF,ylfoP,ypre,yshp,lastY=-1;
 var YCH={off:[0,0],'5':[7,12],min:[3,7],maj:[4,7],m7:[3,10],sus:[5,7]};
 function ypitch(st,t){var f=yfreq(st),gl=P.ygl*P.ygl*.15,ch=YCH[Y.chord]||YCH.off;
@@ -1956,13 +2007,18 @@ function ysched(yi,t){
   if(!W&&VN.y===VC.y&&queue.length)queue[queue.length-1].y=yi;
   if(liveY>0)return;
   var st=Y.pat[yi],next=Y.pat[(yi+1)%Y.len],dur=60/bpmOf(P.tempo)/4;
+  if(Y.eng==='gtr'){
+    if(st.g===0||Y.mute){if(yGate){gOff(t);yGate=false}return}
+    if(st.g===2){if(yGate&&next.g!==2){gOff(t+gLen(dur));yGate=false}return}
+    gPluck(st,t);yGate=true;if(next.g!==2){gOff(t+gLen(dur));yGate=false}return;
+  }
   if(st.g===0||Y.mute){if(yGate)yOff(t);return}
   if(st.g===2){if(yGate&&next.g!==2)yOff(t+dur*.8);return}
   ypitch(st,t);ytrig(st,t);
   if(next.g===2)yGate=true;else yOff(t+dur*.8);
 }
 function ytap(st,remote,v){
-  if(playing||st.g!==1)return;function go(){var t=ctx.currentTime+.01;ypitch(st,t);ytrig(st,t);yOff(t+.25)}
+  if(playing||st.g!==1)return;function go(){var t=ctx.currentTime+.01;if(Y.eng==='gtr'){gPluck(st,t);gOff(t+.45+P.ysus*.8);return}ypitch(st,t);ytrig(st,t);yOff(t+.25)}
   if(!remote&&CUE.y){cueRun(go);return}
   if(NET.role==='guest'){netSend({t:'au',i:'y',n:st.n,o:st.o,a:st.a?1:0,v:VC.y});return}
   initAudio();if(!ctx)return;inMaster(function(){inVoice('y',vIdx(v,'y'),go)});
@@ -1982,7 +2038,23 @@ NOTE.forEach(function(n,i){var b=document.createElement('button');b.className='k
   b.setAttribute('aria-label','Note synthé '+n+(i===12?' aigu':''));
   b.onclick=function(){var st=Y.pat[Y.sel];st.n=i;st.g=1;ytap(st);ychanged()};
   $('ykeys').appendChild(b);yKeyEls.push(b)});
+var GLAB={ycut:'Tonalité',ydrv:'Ampli',ydec:'Tenue corde',ysus:'Longueur',yrel:'Étouffé',ydet:'Gratté'},GHIDE=['yres','yenv','yatt','yint','ysub','ynoise','ygl'],GW={'y-saw':'Chevalet','y-sq':'Milieu','y-tri':'Manche','y-sin':'Doux'},GFMT={};
+/* Le même onglet sert de synthé ou de guitare : les potards changent de nom (ou disparaissent) selon l'instrument. */
+function gUI(){
+  var gt=Y.eng==='gtr';
+  $('ye-syn').setAttribute('aria-pressed',gt?'false':'true');$('ye-gtr').setAttribute('aria-pressed',gt?'true':'false');
+  document.querySelector('#zt-y span').textContent=gt?'GUITARE ÉLECTRIQUE':'SYNTHÉ LEAD';
+  KN.forEach(function(k){var e=knobEls[k.id];if(!e||(k.box!=='yknobs'))return;var w=e.kn.parentNode,l=w.querySelector('.lbl');
+    if(!e.lab0){e.lab0=l.textContent;e.fmt0=k.fmt}
+    w.classList.toggle('gtrhide',gt&&GHIDE.indexOf(k.id)>=0);l.textContent=gt&&GLAB[k.id]?GLAB[k.id]:e.lab0;
+    k.fmt=gt&&k.id==='ycut'?function(v){return Math.round(gCabHz(v))+' Hz'}:gt&&k.id==='ydet'?function(v){return Math.round(v*35)+' ms'}:e.fmt0;drawKnob(k.id)});
+  $('y-wlab').textContent=gt?'Micro':'Onde';Object.keys(GW).forEach(function(id){var b=$(id);if(!b._t0)b._t0=b.textContent;b.textContent=gt?GW[id]:b._t0});
+  $('y-flab').classList.toggle('gtrhide',gt);$('y-fseg').classList.toggle('gtrhide',gt);
+}
+function setEng(e){if(Y.eng===e)return;Y.eng=e;if(e==='gtr'&&!(YP[Y.preset]&&YP[Y.preset].e==='gtr')){$('y-preset').value='gcrunch';$('y-preset').onchange();return}
+  if(e==='synth')Y.preset='';applyParams();ychanged();padUI()}
 function renderY(){
+  gUI();
   Y.pat.forEach(function(st,i){var e=yStepEls[i];e.d.hidden=i>=Y.len;
     e.d.className='step'+(i===Y.sel?' sel':'')+(i===playY?' on':'')+(st.g!==1?' rest':'');
     e.nb.innerHTML=(st.g===1?NOTE[st.n]:(st.g===2?'⌒':'·'))+'<small>'+(st.g===1?(st.o>0?'▲':st.o<0?'▼':''):'')+'</small>';
@@ -2056,6 +2128,8 @@ function ybar(g){
     for(i=0;i<16;i++)a.push(i===0||r()<d?ymk(yoct(g,ydeg(g,ch[ord[c++%ord.length]])),yacc(g,i%4===0)):yrest(g))}
   else if(g.style==='mel'){k=2;var mv=[-2,-1,-1,0,1,1,2];
     for(i=0;i<16;i++){if(i===0||r()<d){k=Math.max(0,Math.min(9,k+mv[Math.floor(r()*mv.length)]));a.push(ymk(yoct(g,ydeg(g,k)),yacc(g,i%4===0)))}else a.push(yrest(g))}}
+  else if(g.style==='riff'){ /* riff : croches sur la tonique, quelques montées à la quinte ou à l'octave, accents sur les temps */
+    var hi=r()<.5?4:3;for(i=0;i<16;i++){if(i%2===0||r()<d*.3){var dg=r()<.72?0:(r()<.6?hi:7);a.push(ymk(ydeg(g,dg)-(r()<.15?12:0),yacc(g,i%4===0)))}else a.push(yrest(g))}}
   else if(g.style==='min'){ /* minimale : un ou deux coups à contretemps, toujours la même note */
     for(i=0;i<16;i++)a.push(yrest(g));var nm=ydeg(g,r()<.7?0:2),ps=[[2,10],[3,11],[6,14],[2,7,10],[3,10,14]][Math.floor(r()*5)];
     ps.forEach(function(p,j){if(j<2||r()<d)a[p]=ymk(nm,yacc(g,j===0))})}
@@ -2283,12 +2357,22 @@ var YP={
   ukvoc:{g:'UK garage',n:'Vocal chop',w:'sawtooth',f:'bandpass',l:'cut',c:'off',k:kset([.5,.2,.6,.85,.35,0,.18,.1,.1,.1,.3,.35,.5,0,.15,.4,0,.65])},
   afkalimba:{g:'Afro et latin',n:'Kalimba',w:'sine',f:'lowpass',l:'cut',c:'off',k:kset([.75,0,.6,0,.5,0,.25,0,.3,0,.3,.35,1,0,0,.4,0,0])},
   ltbrass:{g:'Afro et latin',n:'Cuivres latin',w:'sawtooth',f:'lowpass',l:'cut',c:'off',k:kset([.5,.3,.5,.25,.5,.03,.3,.5,.2,0,.15,.3,.5,0,0,.4,0,.2])},
-  lfkeys:{g:'Lo-fi',n:'Clavier lo-fi (min 7)',w:'triangle',f:'lowpass',l:'pitch',c:'m7',k:kset([.5,.15,.35,.1,.2,.01,.6,.35,.5,0,.2,.45,.5,0,.15,.12,.15,.15])}
+  lfkeys:{g:'Lo-fi',n:'Clavier lo-fi (min 7)',w:'triangle',f:'lowpass',l:'pitch',c:'m7',k:kset([.5,.15,.35,.1,.2,.01,.6,.35,.5,0,.2,.45,.5,0,.15,.12,.15,.15])},
+  gclean:{g:'Guitare électrique',n:'Clean (accords)',e:'gtr',w:'triangle',f:'lowpass',l:'cut',c:'maj',k:kset([.5,.4,.55,0,0,0,.7,.5,.3,0,.2,.3,.5,0,0,.4,0,.05])},
+  gcrunch:{g:'Guitare électrique',n:'Crunch rock (quinte)',e:'gtr',w:'square',f:'lowpass',l:'cut',c:'5',k:kset([.5,.2,.6,0,0,0,.6,.4,.2,0,.15,.2,.5,0,0,.4,0,.45])},
+  gdist:{g:'Guitare électrique',n:'Disto power chords',e:'gtr',w:'sawtooth',f:'lowpass',l:'cut',c:'5',k:kset([.5,.15,.55,0,0,0,.8,.6,.15,0,.12,.2,.5,0,0,.4,0,.9])},
+  gpalm:{g:'Guitare électrique',n:'Palm mute métal',e:'gtr',w:'sawtooth',f:'lowpass',l:'cut',c:'5',k:kset([.25,.05,.45,0,0,0,.1,.1,.05,0,.05,.1,.5,0,0,.4,0,1])},
+  glead:{g:'Guitare électrique',n:'Solo lead (vibrato)',e:'gtr',w:'sawtooth',f:'lowpass',l:'pitch',c:'off',k:kset([.75,0,.65,0,0,0,.9,.8,.3,0,.35,.35,.5,0,0,.6,.15,.8])},
+  gfunk:{g:'Guitare électrique',n:'Funk étouffée (min 7)',e:'gtr',w:'square',f:'lowpass',l:'cut',c:'m7',k:kset([.5,.1,.7,0,0,0,.2,.15,.05,0,.1,.15,.5,0,0,.4,0,.1])},
+  gsurf:{g:'Guitare électrique',n:'Surf (réverb)',e:'gtr',w:'sawtooth',f:'lowpass',l:'pitch',c:'off',k:kset([.75,0,.6,0,0,0,.7,.5,.25,0,.25,.9,.5,0,0,.65,.12,.2])},
+  gskank:{g:'Guitare électrique',n:'Skank reggae (majeur)',e:'gtr',w:'square',f:'lowpass',l:'cut',c:'maj',k:kset([.5,.1,.65,0,0,0,.15,.1,.05,0,.5,.3,.5,0,0,.4,0,.05])},
+  gshoe:{g:'Guitare électrique',n:'Shoegaze (sus4)',e:'gtr',w:'sawtooth',f:'lowpass',l:'pitch',c:'sus',k:kset([.5,.6,.5,0,0,0,1,1,.6,0,.6,1,.5,0,0,.3,.08,.7])},
+  gblues:{g:'Guitare électrique',n:'Blues crunch',e:'gtr',w:'triangle',f:'lowpass',l:'pitch',c:'off',k:kset([.5,0,.55,0,0,0,.75,.6,.25,0,.2,.35,.5,0,0,.55,.1,.5])}
 };
 fillPresets($('y-preset'),YP);
 $('y-preset').onchange=function(){var n=this.value,p=YP[n];if(!p){Y.preset='';save();return}
   Object.keys(p.k).forEach(function(k){P[k]=p.k[k];drawKnob(k)});
-  Y.wave=p.w;Y.ftype=p.f;Y.lfoT=p.l;Y.chord=p.c;Y.preset=n;applyParams();ychanged();ytap(S(1,9,0,0,0))};
+  Y.wave=p.w;Y.ftype=p.f;Y.lfoT=p.l;Y.chord=p.c;Y.preset=n;Y.eng=p.e==='gtr'?'gtr':'synth';applyParams();ychanged();ytap(S(1,9,0,0,0))};
 function renderYOpt(){
   YOPT.forEach(function(o){$(o[0]).setAttribute('aria-pressed',Y[o[1]]===o[2])});
   $('y-preset').value=YP[Y.preset]?Y.preset:'';
@@ -2446,6 +2530,7 @@ function liveOn(i,n,legato,o,a,src,v){
     var t=ctx.currentTime,st=S(1,n,o,a,0);
     if(i==='b'){var f=freq(st);liveB=1;bfq.offset.cancelScheduledValues(t);
       if(legato||was)bfq.offset.setTargetAtTime(f,t,.02);else{bfq.offset.setValueAtTime(f,t);trigger(st,t)}}
+    else if(Y.eng==='gtr'){liveY=1;gPluck(st,t)} /* la guitare se repince à chaque touche */
     else{liveY=1;ypitch(st,t);if(!(legato||was))ytrig(st,t)}
   }
   if(cw)inCue(go);else inMaster(function(){inVoice(i,v,go)});
@@ -2687,8 +2772,8 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=60; /* numéro de version de l'appli : identique à celui de version.json */
-var PROTO=5,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
+var BUILD=61; /* numéro de version de l'appli : identique à celui de version.json */
+var PROTO=6,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
 function nmsg(m){$('n-msg').textContent=m||''}
@@ -2709,7 +2794,7 @@ var SEC={
   Y:{get:function(){return omit(Y,['sel','lo','lacc'])},
     set:function(d){if(!okSteps(d.pat))return;Y.pat=d.pat;Y.len=d.len===16?16:32;Y.mute=!!d.mute;Y.preset=String(d.preset||'');
       Y.wave=one(d.wave,['sawtooth','square','triangle','sine'],'sawtooth');Y.ftype=one(d.ftype,['lowpass','bandpass','highpass'],'lowpass');
-      Y.lfoT=one(d.lfoT,['cut','pitch'],'cut');Y.chord=one(d.chord,['off','5','min','maj','m7','sus'],'off');if(Y.sel>=Y.len)Y.sel=0},
+      Y.lfoT=one(d.lfoT,['cut','pitch'],'cut');Y.chord=one(d.chord,['off','5','min','maj','m7','sus'],'off');Y.eng=d.eng==='gtr'?'gtr':'synth';if(Y.sel>=Y.len)Y.sel=0},
     draw:function(){renderY()}},
   D:{get:function(){return omit(D,['sel'])},
     set:function(d){if(!okDrums(d))return;D.pat=d.pat;D.inst=d.inst;D.v=d.v==='B'?'B':'A';D.chain=!!d.chain;D.auto=one(+d.auto,[0,2,4,8],0);D.kick=String(d.kick||'');
@@ -3409,7 +3494,8 @@ function autoUI(){
   b.classList.toggle('beat',AUTO.on&&playing&&k===0);
   [4,8,16].forEach(function(p){$('k-ap'+p).setAttribute('aria-pressed',AUTO.P===p?'true':'false')});
 }
-$('k-auto').onclick=function(){autoSet(!AUTO.on)};$('k-auto1').onclick=autoOnce;
+$('k-auto').onclick=function(){autoSet(!AUTO.on)};
+$('ye-syn').onclick=function(){setEng('synth')};$('ye-gtr').onclick=function(){setEng('gtr')};$('k-auto1').onclick=autoOnce;
 [4,8,16].forEach(function(p){$('k-ap'+p).onclick=function(){autoP(p)}});
 /* ----- LOOP (répétition des 3 derniers pas, façon « beat repeat ») -----
    Un petit processeur audio garde en permanence les 16 dernières secondes de la sortie du master. Tant que le bouton est
@@ -3602,7 +3688,7 @@ function padUI(){
       if(b._d!==d){b._d=d;while(b.lastChild&&b.lastChild!==b.firstChild)b.removeChild(b.lastChild);if(d)try{b.appendChild(padSvg(g,d))}catch(e){}}
     }
   });
-  vUI();autoUI();
+  vUI();autoUI();PADG.forEach(function(r){if(r.charAt(0)==='y'){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)}});
   RPN.forEach(function(n){$('k-loop'+n).classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest')});if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
@@ -3617,6 +3703,7 @@ function padUI(){
 function vUI(){
   ['b','y'].forEach(function(g){for(var v=0;v<3;v++){var b=$('vt-'+g+'-'+v),on=v===VC[g];if(!b)continue;
     b.setAttribute('aria-pressed',on?'true':'false');b.classList.toggle('off',!!OFFG[g+v]);b.classList.toggle('has',vHasNotes(g,v));
+    if(g==='y')b.textContent=(vEng(v)==='gtr'?'Guitare ':'Synthé ')+(v+1);
     b.disabled=!!CUE[g]&&!on;b.title=CUE[g]&&!on?'Quitte le cue pour changer':(OFFG[g+v]?'En mute':'')}});
 }
 function vSel(g,v){
