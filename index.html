@@ -396,6 +396,10 @@ html.fsl,html.fsl body{overflow:hidden}
 .zt i::before{content:"▾"}
 .zone.shut .zt i::before{content:"▸"}
 .zone.shut>*:not(h2){display:none}
+.zsolo{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;margin:-6px 0 -6px;padding:3px 9px 3px 7px;border-radius:999px;border:1px solid color-mix(in srgb,var(--zc) 45%,var(--line));background:transparent;color:var(--ink-soft);font:600 10px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
+.zsolo svg{width:13px;height:13px}
+.zsolo[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
+.zsolo.out{opacity:.5;border-style:dashed}
 .zone.shut>h2{margin-bottom:-14px;border-bottom:0;border-radius:8px}
 @media (max-width:700px){.machine{padding:10px}.zone{padding:10px}.zone>h2{margin:-10px -10px -6px;padding:8px 10px 7px}.zone.shut>h2{margin-bottom:-10px}.tbar{margin:0 -10px;padding:7px 10px}.tbar #astate{flex:1 1 100%}.tbar #astate[data-ok]{display:none}}
 #lb-live,#ly-live{display:none!important} /* live libre pour tous : plus de bouton demander / rendre */
@@ -1434,8 +1438,21 @@ function applyParams(){
   if(ENG[1]&&cueAny())inCue(apply0);
 }
 /* niveau de sortie d'un instrument du master, avec son mute de pad (seul ce niveau change) */
+/* SOLO : la rangée qu'on écoute seule ('b0'…'y2', 'g', 'd', 'l', 'c'), décidée sur le master. Les autres sont muettes
+   le temps du solo, sans toucher à leurs mutes ni à leurs réglages. */
+var SOLO='',SOLOZ=['b','y','g','l','c','d'],SOLON={l:'Looper',c:'Congas'};
+function soloClean(v){v=String(v==null?'':v);return /^(b[0-2]|y[0-2]|g|d|l|c)$/.test(v)?v:''}
+function soloOut(k){return !!SOLO&&k!==SOLO}
+function soloRow(z){return z==='b'||z==='y'?z+VC[z]:z}
+function soloName(r){return SOLON[r]||rname(r)}
+function soloApply(r){r=soloClean(r);if(NET.role==='guest'){netSend({t:'so',z:r});return}if(r===SOLO)return;SOLO=r;applyParams();soloUI();save()}
+function soloTap(z){var r=soloRow(z),nx=SOLO===r?'':r;soloApply(nx);kmsg(nx?'Solo : '+soloName(nx)+' seul':'Solo coupé : tout le monde revient');soloUI()}
+function soloUI(){SOLOZ.forEach(function(z){var b=$('zs-'+z);if(!b)return;var on=!!SOLO&&SOLO.charAt(0)===z,r=soloRow(z);
+  b.setAttribute('aria-pressed',on?'true':'false');b.classList.toggle('out',!!SOLO&&!on);
+  b.lastChild.textContent=on?'Solo · '+soloName(SOLO):!!SOLO?'Coupé par le solo':'Écouter seul';
+  b.title=on?'Toucher pour réécouter tous les instruments':'Écouter seulement '+soloName(r)})}
 function plvl(prm,key,v,t){
-  if(!W&&OFFG[key]){prm.cancelScheduledValues(t);prm.setTargetAtTime(0,t,.02)}
+  if(!W&&(OFFG[key]||soloOut(key))){prm.cancelScheduledValues(t);prm.setTargetAtTime(0,t,.02)}
   else if(!W&&offAt[key]-.004>t)prm.setTargetAtTime(v,offAt[key]-.004,.001); /* ouvert pile pour le premier temps */
   else prm.setTargetAtTime(v,t,.02);
 }
@@ -1463,7 +1480,7 @@ function aY(t){
 }
 function apply0(){
   var t=ctx.currentTime;
-  lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(P.lmast*1.6,t,.02);cbus.gain.setTargetAtTime(P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
+  lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(soloOut('l')?0:P.lmast*1.6,t,.02);cbus.gain.setTargetAtTime(soloOut('c')?0:P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
   plvl(drumBus.gain,'d',P.dvol,t);plvl(kickBus.gain,'d',P.dvol*1.5,t);if(lastK!==P.kdrive){lastK=P.kdrive;kshaper.curve=curve(1+P.kdrive*28)}dsend.gain.setTargetAtTime(P.dly*.6,t,.02);rsend.gain.setTargetAtTime(P.rev*.7,t,.02);
   dly.delayTime.setTargetAtTime(Math.min(1.9,3*60/bpmOf(P.tempo)/4),t,.05);
   if(W){aB(t);aY(t);return} /* moteur du cue : la seule voix en préparation */
@@ -3172,7 +3189,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=63; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=64; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3206,10 +3223,10 @@ var SEC={
       L.slots=LK.map(function(i){var s=d.slots[i]||{};return {vol:num(s.vol,.8),start:num(s.start,0),rate:num(s.rate,.5),mute:!!s.mute,rev:!!s.rev,loop:s.loop!==false}});
       var s=L.slots[L.sel];P.lvol=s.vol;P.lstart=s.start;P.lrate=s.rate},
     draw:function(){['lvol','lstart','lrate'].forEach(drawKnob);renderL()}},
-  M:{get:function(){var o={q:'',a:AUTO.on?1:0,ap:AUTO.P,an:AUTO.n};PADG.forEach(function(r){o[r]=OFFG[r];if(OFFQ[r])o.q+=r+','});return o}, /* seul le master l'émet ; un invité passe par un message dédié */
-    set:function(d){var q=String(d.q||'').split(',');PADG.forEach(function(r){OFFG[r]=!!d[r];OFFQ[r]=OFFG[r]&&q.indexOf(r)>=0});
+  M:{get:function(){var o={q:'',a:AUTO.on?1:0,ap:AUTO.P,an:AUTO.n,so:SOLO};PADG.forEach(function(r){o[r]=OFFG[r];if(OFFQ[r])o.q+=r+','});return o}, /* seul le master l'émet ; un invité passe par un message dédié */
+    set:function(d){SOLO=soloClean(d.so);var q=String(d.q||'').split(',');PADG.forEach(function(r){OFFG[r]=!!d[r];OFFQ[r]=OFFG[r]&&q.indexOf(r)>=0});
       if(NET.role==='guest'){AUTO.on=!!d.a;if([4,8,16].indexOf(d.ap|0)>=0)AUTO.P=d.ap|0;AUTO.n=d.an|0}},
-    draw:function(){applyParams();offUI();autoUI()}}
+    draw:function(){applyParams();offUI();autoUI();soloUI()}}
 };
 function snap(){inMaster(function(){for(var k in SEC)lastS[k]=JSON.stringify(SEC[k].get());for(var id in P)lastP[id]=P[id]})}
 /* Appelé à chaque modification locale : envoie, 30 ms plus tard, uniquement ce qui a changé. */
@@ -3303,6 +3320,7 @@ function hostRx(c,m){
       if(m.g&&!pcan(c,m.g))break;
       if(m.q&&playing){qst.push({c:c,m:m});break} /* envoi d'un cue pendant la lecture : il entrera à la prochaine mesure */
       netApply(m);netSend(m,c);if(m.g)netTo(c,{t:'cq',g:m.g});break;
+    case 'so':soloApply(m.z);break; /* un invité met un instrument en solo */
     case 'ap':if(m.once)autoOnce();else if(m.p)autoP(m.p|0);else autoSet(!!m.on);break; /* un invité allume l'auto live */
     case 'rp':if(m.on)rpOn(c,m.n);else if(RP.by===c)rpOff();break; /* un invité maintient le bouton loop */
     case 'cmd':
@@ -3605,7 +3623,7 @@ var ACC={},REQ=[],GN={},gseq=0,lockNote={},askT={},memId='';
 function pclean(p){p=String(p==null?'':p);var r='';for(var i=0;i<PGS.length;i++)if(p.indexOf(PGS.charAt(i))>=0)r+=PGS.charAt(i);return r}
 function pnames(p){return p?p.split('').map(function(g){return PGN[g]}).join(' · '):'aucun instrument'}
 function gname(v){return String(v==null?'':v).replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,16)}
-function mgrp(m){switch(m.t){case 'cmd':return m.c==='fill'?'d':'t';case 'nt':case 'au':return m.i==='y'?'y':m.i==='g'?'g':'b';case 'tp':return 'd';case 'lp':case 'lc':case 'lf':case 'lx':return 'l';case 'cg':return 'c';case 'rl':case 'ks':case 'kl':case 'ko':var rg=String(m.g||'').charAt(0);return rg==='b'||rg==='y'||rg==='d'||rg==='g'?rg:'x'}return ''}
+function mgrp(m){switch(m.t){case 'cmd':return m.c==='fill'?'d':'t';case 'nt':case 'au':return m.i==='y'?'y':m.i==='g'?'g':'b';case 'tp':return 'd';case 'so':var sz=soloClean(m.z).charAt(0);return sz||'t';case 'lp':case 'lc':case 'lf':case 'lx':return 'l';case 'cg':return 'c';case 'rl':case 'ks':case 'kl':case 'ko':var rg=String(m.g||'').charAt(0);return rg==='b'||rg==='y'||rg==='d'||rg==='g'?rg:'x'}return ''}
 function pcan(c,g){return !!g&&!c._wait&&!c._gone&&String(c._pm||'').indexOf(g)>=0}
 function mk(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
 /* -- côté master -- */
@@ -3797,6 +3815,12 @@ function permUI(){
   knobEls.tempo.kn.parentNode.classList.toggle('klock',t);knobEls.tempo.kn.tabIndex=t?-1:0;
   $('bpm-btn').disabled=t;if(t)bpmEd(false);
 }
+SOLOZ.forEach(function(z){
+  var b=document.createElement('button');b.type='button';b.className='zsolo';b.id='zs-'+z;b.setAttribute('aria-pressed','false');
+  b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="3" y="13" width="5" height="7" rx="1.5" fill="currentColor"/><rect x="16" y="13" width="5" height="7" rx="1.5" fill="currentColor"/></svg><span></span>';
+  var zn=document.querySelector('.'+ZK[z]);zn.insertBefore(b,zn.querySelector('h2').nextSibling);b.onclick=function(){soloTap(z)};
+});
+soloUI();
 ['b','y','g','l','c','d'].forEach(function(g){
   var bar=mk('div','lockbar'),t=mk('span','lbl'),b=mk('button','btn','Demander l\'accès');
   t.id='lk-'+g+'-t';t.setAttribute('role','status');b.id='lk-'+g+'-ask';b.type='button';bar.appendChild(t);bar.appendChild(b);
@@ -4118,6 +4142,7 @@ function vSel(g,v){
   vSwapS(g,v);VS[g][o]=VS[g][v];VS[g][v]=vNew(g); /* l'onglet quitté est rangé, le nouveau occupe les variables */
   VC[g]=VN[g]=v;
   if(ctx&&ENG[0]&&engCur===0){var e=ENG[0],fresh=vNodes(e,g,v);vLoad(e,g,v);if(fresh){if(g==='b')aB(ctx.currentTime);else aY(ctx.currentTime)}}
+  if(SOLO&&SOLO.charAt(0)===g)soloApply(g+v);soloUI();
   if(g==='b'){if(sel>=BL)sel=0;lastS.pat=JSON.stringify(SEC.pat.get());lastS.B=JSON.stringify(SEC.B.get());renderLen();refresh();renderB()}
   else{if(Y.sel>=Y.len)Y.sel=0;lastS.Y=JSON.stringify(SEC.Y.get());renderY();try{renderYOpt()}catch(e){}}
   VK[g].forEach(function(k){lastP[k]=P[k];drawKnob(k)});
