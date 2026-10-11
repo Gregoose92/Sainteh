@@ -396,10 +396,20 @@ html.fsl,html.fsl body{overflow:hidden}
 .zt i::before{content:"▾"}
 .zone.shut .zt i::before{content:"▸"}
 .zone.shut>*:not(h2){display:none}
-.zsolo{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;margin:-6px 0 -6px;padding:3px 9px 3px 7px;border-radius:999px;border:1px solid color-mix(in srgb,var(--zc) 45%,var(--line));background:transparent;color:var(--ink-soft);font:600 10px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
+.zacts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-6px 0 -6px}
+.zsolo{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;margin:0;padding:3px 9px 3px 7px;border-radius:999px;border:1px solid color-mix(in srgb,var(--zc) 45%,var(--line));background:transparent;color:var(--ink-soft);font:600 10px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
 .zsolo svg{width:13px;height:13px}
 .zsolo[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
 .zsolo.out{opacity:.5;border-style:dashed}
+.zrec .dot{width:8px;height:8px;border-radius:50%;background:var(--led-off,#a33)}
+.zrec[aria-expanded="true"]{border-color:var(--led);color:var(--ink)}
+.zrec[aria-expanded="true"] .dot,.zrec.ok .dot{background:var(--led)}
+.zslots{display:inline-flex;gap:4px}
+.zslots[hidden]{display:none}
+.zslot{min-width:30px;height:24px;padding:0 6px;border-radius:5px;border:1px dashed color-mix(in srgb,var(--zc) 55%,var(--line));background:transparent;color:var(--ink-soft);font:600 11px/1 var(--f-mono);cursor:pointer;touch-action:manipulation}
+.zslot.has{border-style:solid;background:color-mix(in srgb,var(--zc) 22%,transparent);color:var(--ink)}
+.zslot.act{background:var(--zc);border-color:var(--zc);color:var(--zon)}
+.zslot:focus-visible,.zrec:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .zone.shut>h2{margin-bottom:-14px;border-bottom:0;border-radius:8px}
 @media (max-width:700px){.machine{padding:10px}.zone{padding:10px}.zone>h2{margin:-10px -10px -6px;padding:8px 10px 7px}.zone.shut>h2{margin-bottom:-10px}.tbar{margin:0 -10px;padding:7px 10px}.tbar #astate{flex:1 1 100%}.tbar #astate[data-ok]{display:none}}
 #lb-live,#ly-live{display:none!important} /* live libre pour tous : plus de bouton demander / rendre */
@@ -1438,6 +1448,30 @@ function applyParams(){
   if(ENG[1]&&cueAny())inCue(apply0);
 }
 /* niveau de sortie d'un instrument du master, avec son mute de pad (seul ce niveau change) */
+/* ● PAD sous le titre : enregistre ce que l'on entend de l'instrument (l'onglet ouvert) dans un des 5 pads de sa ligne.
+   Un appui ouvre les 5 cases (pleines = déjà un pad, en couleur = celui en place) ; une case touchée est enregistrée (ou réécrite). */
+var ZRECZ=['b','y','g','d'],ZREC='';
+function zrecRow(z){return z==='b'||z==='y'?z+VC[z]:z}
+function zrecMake(z,row){
+  var b=document.createElement('button');b.type='button';b.className='zsolo zrec';b.id='zr-'+z;b.setAttribute('aria-expanded','false');
+  b.innerHTML='<span class="dot" aria-hidden="true"></span><span>Pad</span>';b.title='Enregistrer dans un pad';row.appendChild(b);
+  var sl=document.createElement('span');sl.className='zslots';sl.id='zrs-'+z;sl.hidden=true;sl.setAttribute('role','group');row.appendChild(sl);
+  for(var i=0;i<5;i++)(function(i){var c=document.createElement('button');c.type='button';c.className='zslot';c.id='zrs-'+z+'-'+i;c.textContent=i+1;sl.appendChild(c);c.onclick=function(){zrecSave(z,i)}})(i);
+  b.onclick=function(){ZREC=ZREC===z?'':z;zrecUI()};
+}
+function zrecSave(z,i){
+  var r=zrecRow(z),guest=NET.role==='guest',nm=rname(r)+' · pad '+(i+1);
+  if(!can(z)){kmsg('Le master ne t\'a pas ouvert cet instrument');return}
+  if(guest&&!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}
+  var had=!!PADS[r][i],nd=padSnap(r);if(guest)netSend({t:'ks',g:r,k:i,d:nd});else padSet(r,i,nd);
+  ZREC='';kmsg(nm+(had?' réécrit':' enregistré'));zrecUI();
+  var b=$('zr-'+z);b.classList.add('ok');b.lastChild.textContent='Pad '+(i+1)+' ✓';clearTimeout(b._t);b._t=setTimeout(function(){b.classList.remove('ok');zrecUI()},1800);
+}
+function zrecUI(){ZRECZ.forEach(function(z){var b=$('zr-'+z);if(!b)return;var r=zrecRow(z),open=ZREC===z,cur='';try{cur=padCur(r)}catch(e){}
+  b.setAttribute('aria-expanded',open?'true':'false');if(!b.classList.contains('ok'))b.lastChild.textContent=open?'Choisis le pad':'Pad';
+  b.title='Enregistrer '+rname(r)+' dans un pad';b.disabled=!can(z);$('zrs-'+z).hidden=!open;$('zrs-'+z).setAttribute('aria-label','Pads de '+rname(r));
+  for(var i=0;i<PADN;i++){var c=$('zrs-'+z+'-'+i),d=PADS[r]&&PADS[r][i],same=false;if(d)try{same=padSlotKey(r,d)===cur}catch(e){}
+    c.className='zslot'+(d?' has':'')+(same?' act':'');c.setAttribute('aria-label','Enregistrer dans le pad '+(i+1)+(d?(same?' (en place, identique)':' (déjà rempli : sera réécrit)'):' (vide)'))}})}
 /* SOLO : la rangée qu'on écoute seule ('b0'…'y2', 'g', 'd', 'l', 'c'), décidée sur le master. Les autres sont muettes
    le temps du solo, sans toucher à leurs mutes ni à leurs réglages. */
 var SOLO='',SOLOZ=['b','y','g','l','c','d'],SOLON={l:'Looper',c:'Congas'};
@@ -3189,7 +3223,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=64; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=65; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3818,7 +3852,9 @@ function permUI(){
 SOLOZ.forEach(function(z){
   var b=document.createElement('button');b.type='button';b.className='zsolo';b.id='zs-'+z;b.setAttribute('aria-pressed','false');
   b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="3" y="13" width="5" height="7" rx="1.5" fill="currentColor"/><rect x="16" y="13" width="5" height="7" rx="1.5" fill="currentColor"/></svg><span></span>';
-  var zn=document.querySelector('.'+ZK[z]);zn.insertBefore(b,zn.querySelector('h2').nextSibling);b.onclick=function(){soloTap(z)};
+  var zn=document.querySelector('.'+ZK[z]),row=document.createElement('div');row.className='zacts';row.appendChild(b);
+  zn.insertBefore(row,zn.querySelector('h2').nextSibling);b.onclick=function(){soloTap(z)};
+  if(ZRECZ.indexOf(z)>=0)zrecMake(z,row);
 });
 soloUI();
 ['b','y','g','l','c','d'].forEach(function(g){
@@ -4116,7 +4152,7 @@ function padUI(){
       if(b._d!==d){b._d=d;while(b.lastChild&&b.lastChild!==b.firstChild)b.removeChild(b.lastChild);if(d)try{b.appendChild(padSvg(g,d))}catch(e){}}
     }
   });
-  vUI();autoUI();PADG.forEach(function(r){if(r.charAt(0)==='y'){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)}});
+  vUI();autoUI();zrecUI();PADG.forEach(function(r){if(r.charAt(0)==='y'){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)}});
   RPN.forEach(function(n){$('k-loop'+n).classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest')});if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
