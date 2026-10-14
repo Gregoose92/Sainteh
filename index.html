@@ -249,6 +249,11 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .kgrid{display:grid;grid-template-columns:auto repeat(6,minmax(0,1fr));gap:6px;align-items:center;max-width:680px}
 .klab{padding:0 4px 0 0;border:0;background:none;text-align:left;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--zc)}
 button.klab{min-height:44px;cursor:pointer}
+.khead{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:46px}
+.khead .klab{min-height:0;padding:1px 2px;font-size:9.5px;letter-spacing:.06em;text-align:center;white-space:nowrap}
+.knob.ksm{width:30px;height:30px;box-shadow:0 1px 0 var(--line)}
+.knob.ksm::after,.zone .knob.ksm::after{top:3px;width:2.5px;height:10px;margin-left:-1.25px;transform-origin:50% 12px;background:var(--zc)}
+.knob.ksm:disabled,.knob.ksm[aria-disabled="true"]{opacity:.4;cursor:default}
 button.klab:disabled{cursor:not-allowed}
 .klab.off{opacity:.45;text-decoration:line-through}
 .klab[data-g="b"],.kpad[data-g="b"]{--zc:var(--c-b);--zon:var(--on-c)}
@@ -3227,7 +3232,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=66; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=67; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4120,6 +4125,21 @@ function padGhost(r){
   padUI();
 }
 function ghostPend(r){var v=GHQ[r];return !OFFG[r]&&(v===1||(v>1&&Date.now()-v<5000))}
+/* Potard de volume de chaque ligne de pads : le volume de cette basse / ce synthé (même s'il n'est pas l'onglet ouvert),
+   de la guitare ou des rythmes. Même réglage que le potard Volume de l'instrument. */
+var RVK={b:'vol',y:'yvol',g:'gvol',d:'dvol'};
+function rowVolKey(r){return RVK[r.charAt(0)]}
+function rowVol(r){var g=r.charAt(0),v=+r.charAt(1)||0,k=rowVolKey(r);if((g==='b'||g==='y')&&v!==VC[g]){var a=VS[g][v];return a&&a.p&&typeof a.p[k]==='number'?a.p[k]:P[k]}return P[k]}
+function rowVolSet(r,x){
+  var g=r.charAt(0),v=+r.charAt(1)||0,k=rowVolKey(r);x=Math.max(0,Math.min(1,Math.round(x*1000)/1000));
+  if(!can(g))return;
+  if(!((g==='b'||g==='y')&&v!==VC[g])){setKnob(k,x);rowVolUI();return}
+  var m={t:'st',p:{},vb:VC.b,vy:VC.y};m.p[k]=x;m['v'+g]=v; /* une autre voix que l'onglet ouvert : rangée dans sa mémoire, comme un pad */
+  netApply(m);if(NET.role!=='solo')netSend(m);save();rowVolUI();
+}
+function rowVolUI(){PADG.forEach(function(r){var e=$('kv-'+r);if(!e)return;var v=rowVol(r),ok=can(r.charAt(0))&&!(NET.role==='guest'&&(NET.wait||NET.denied));
+  e.style.setProperty('--a',(-135+v*270)+'deg');e.setAttribute('aria-valuenow',Math.round(v*100));e.setAttribute('aria-valuetext',Math.round(v*100)+' %');
+  e.setAttribute('aria-disabled',ok?'false':'true');e.tabIndex=ok?0:-1;e.title=rname(r)+' : volume '+Math.round(v*100)+' %'})}
 function padTap(g,i){
   if(!can(g.charAt(0)))return;
   var d=PADS[g][i],name=rname(g)+' · pad '+(i+1),guest=NET.role==='guest';
@@ -4176,7 +4196,7 @@ function padUI(){
   PADG.forEach(function(g){var z=$('kz-'+g),ok=can(g.charAt(0))&&!(NET.role==='guest'&&(NET.wait||NET.denied)),on=!!OFFG[g]&&!OFFQ[g],pd=ghostPend(g);
     z.disabled=!ok;z.className='kpad kghost'+(on?' act':'')+(pd?' pend':'');z.setAttribute('aria-pressed',on?'true':'false');
     z.setAttribute('aria-label',rname(g)+' : pad vide (silence)'+(on?', en place':pd?', à la prochaine mesure':''));z.title='Pad vide : '+rname(g)+' se tait jusqu\'au prochain pad'});
-  vUI();autoUI();zrecUI();PADG.forEach(function(r){if(r.charAt(0)==='y'){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)}});
+  vUI();autoUI();zrecUI();rowVolUI();PADG.forEach(function(r){if(r.charAt(0)==='y'){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)}});
   RPN.forEach(function(n){$('k-loop'+n).classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest')});if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
@@ -4222,7 +4242,17 @@ function loopSvg(pk){
 (function(){
   var grid=$('kgrid');
   PADG.forEach(function(g){
-    var l=mk('button','klab',rname(g));l.type='button';l.id='kl-'+g;l.setAttribute('data-g',g.charAt(0));l.setAttribute('aria-pressed','true');l.title='Mute';grid.appendChild(l);
+    var hd=mk('div','khead'),kn=mk('div','knob ksm');hd.setAttribute('data-g',g.charAt(0));hd.style.setProperty('--zc',{b:'var(--c-b)',y:'var(--c-y)',g:'var(--c-g)',d:'var(--knob-mark)'}[g.charAt(0)]);
+    kn.id='kv-'+g;kn.tabIndex=0;kn.setAttribute('role','slider');kn.setAttribute('aria-label','Volume '+rname(g));kn.setAttribute('aria-valuemin',0);kn.setAttribute('aria-valuemax',100);hd.appendChild(kn);
+    (function(r,kn){var sy=0,v0=0,def={b:.7,y:.6,g:.65,d:.75}[r.charAt(0)];
+      function ok(){return kn.getAttribute('aria-disabled')!=='true'}
+      function set(x){rowVolSet(r,x);kmsg(rname(r)+' : volume '+Math.round(rowVol(r)*100)+' %')}
+      kn.addEventListener('pointerdown',function(e){if(!ok())return;kn.setPointerCapture(e.pointerId);sy=e.clientY;v0=rowVol(r);e.preventDefault();kn.focus()});
+      kn.addEventListener('pointermove',function(e){if(!kn.hasPointerCapture(e.pointerId))return;set(v0+(sy-e.clientY)/160)});
+      kn.addEventListener('dblclick',function(){if(ok())set(def)});
+      kn.addEventListener('keydown',function(e){if(!ok())return;var d=e.shiftKey?.1:.02;
+        if(e.key==='ArrowUp'||e.key==='ArrowRight'){set(rowVol(r)+d);e.preventDefault()}else if(e.key==='ArrowDown'||e.key==='ArrowLeft'){set(rowVol(r)-d);e.preventDefault()}})})(g,kn);
+    var l=mk('button','klab',rname(g));l.type='button';l.id='kl-'+g;l.setAttribute('data-g',g.charAt(0));l.setAttribute('aria-pressed','true');l.title='Mute';hd.appendChild(l);grid.appendChild(hd);
     l.onclick=function(){var v=!OFFG[g]||OFFQ[g];offTap(g,v);kmsg(rname(g)+(v?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'))};
     for(var i=0;i<PADN;i++)(function(i){var b=mk('button','kpad empty');b.type='button';b.id='kp-'+g+'-'+i;b.setAttribute('data-g',g.charAt(0));b.appendChild(mk('span','kn',i+1));b.onclick=function(){padTap(g,i)};grid.appendChild(b)})(i);
     var z=mk('button','kpad kghost');z.type='button';z.id='kz-'+g;z.setAttribute('data-g',g.charAt(0));z.onclick=function(){padGhost(g)};grid.appendChild(z);
