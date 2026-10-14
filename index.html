@@ -246,7 +246,7 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .cgr{fill:none;stroke:var(--zc);stroke-width:4;opacity:0;pointer-events:none;transform-box:fill-box;transform-origin:center}
 .cgr.go{animation:cgr .3s ease-out}
 /* pads : cinq mémoires par instrument */
-.kgrid{display:grid;grid-template-columns:auto repeat(5,minmax(0,1fr));gap:6px;align-items:center;max-width:680px}
+.kgrid{display:grid;grid-template-columns:auto repeat(6,minmax(0,1fr));gap:6px;align-items:center;max-width:680px}
 .klab{padding:0 4px 0 0;border:0;background:none;text-align:left;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--zc)}
 button.klab{min-height:44px;cursor:pointer}
 button.klab:disabled{cursor:not-allowed}
@@ -257,6 +257,10 @@ button.klab:disabled{cursor:not-allowed}
 .klab[data-g="l"],.kpad[data-g="l"]{--zc:var(--c-l);--zon:var(--on-c)}
 .klab[data-g="g"],.kpad[data-g="g"]{--zc:var(--c-g);--zon:var(--on-c)}
 .kpad[data-g="l"].empty::after{content:"–"}
+.kpad.kghost{border-style:dashed;background:transparent;color:var(--ink-soft)}
+.kpad.kghost::after{content:"∅";position:absolute;inset:0;display:grid;place-items:center;font-size:19px;font-weight:600;opacity:.7}
+.kpad.kghost.act{background:color-mix(in srgb,var(--zc) 30%,transparent);border-style:solid;border-color:var(--zc);color:var(--ink)}
+.kgap{min-height:1px}
 .kpad{position:relative;aspect-ratio:1/1;min-height:44px;padding:0;border:1px solid color-mix(in srgb,var(--zc) 55%,var(--line));border-radius:6px;background:var(--btn);color:var(--zc);cursor:pointer;overflow:hidden;touch-action:manipulation}
 .kpad .kn{position:absolute;left:5px;top:3px;font-family:var(--f-mono);font-size:10px;line-height:1;color:inherit;opacity:.8}
 .kpad svg{position:absolute;left:5px;right:5px;top:16px;bottom:5px;width:calc(100% - 10px);height:calc(100% - 21px);fill:currentColor}
@@ -3223,7 +3227,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=65; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=66; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3371,6 +3375,7 @@ function hostRx(c,m){
     case 'lf':hostFile(c,m);break;
     case 'ks':if(PADG.indexOf(m.g)>=0&&k>=0&&k<PADN){var kd=m.d?padClean(m.g,m.d):null;if(m.d&&!kd)break;padSet(m.g,k,kd)}break; /* un invité enregistre ou efface un pad */
     case 'kl':if(PADG.indexOf(m.g)>=0&&k>=0&&k<PADN)padLaunch(m.g,k,!!m.o);break;
+    case 'kz':if(PADG.indexOf(m.g)>=0)padGhost(m.g);break; /* un invité lance le pad fantôme */
     case 'ko':if(PADG.indexOf(m.g)>=0)setOff(m.g,!!m.v);break;
     case 'lx':if(k>=0&&k<LN)lstop(k);break;
     case 'cg':
@@ -3645,7 +3650,7 @@ function cueUI(){
 /* côté hôte : les cues reçus pendant la lecture attendent le début de la mesure suivante */
 function netQueued(){
   if(!qst.length)return;var q=qst;qst=[];
-  q.forEach(function(x){try{if(x.off){if(OFFQ[x.off])offNow(x.off,playing?nextTime:0);return}if(x.local){cueTake(x.local,x.m,x.pad);return}netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
+  q.forEach(function(x){try{if(x.ghost){ghostFire(x.ghost);return}if(x.off){if(OFFQ[x.off])offNow(x.off,playing?nextTime:0);return}if(x.local){cueTake(x.local,x.m,x.pad);return}netApply(x.m);netSend(x.m,x.c);if(x.m.g)netTo(x.c,{t:'cq',g:x.m.g})}catch(e){}});
 }
 
 /* ----- profils : un master, des invités -----
@@ -3657,7 +3662,7 @@ var ACC={},REQ=[],GN={},gseq=0,lockNote={},askT={},memId='';
 function pclean(p){p=String(p==null?'':p);var r='';for(var i=0;i<PGS.length;i++)if(p.indexOf(PGS.charAt(i))>=0)r+=PGS.charAt(i);return r}
 function pnames(p){return p?p.split('').map(function(g){return PGN[g]}).join(' · '):'aucun instrument'}
 function gname(v){return String(v==null?'':v).replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,16)}
-function mgrp(m){switch(m.t){case 'cmd':return m.c==='fill'?'d':'t';case 'nt':case 'au':return m.i==='y'?'y':m.i==='g'?'g':'b';case 'tp':return 'd';case 'so':var sz=soloClean(m.z).charAt(0);return sz||'t';case 'lp':case 'lc':case 'lf':case 'lx':return 'l';case 'cg':return 'c';case 'rl':case 'ks':case 'kl':case 'ko':var rg=String(m.g||'').charAt(0);return rg==='b'||rg==='y'||rg==='d'||rg==='g'?rg:'x'}return ''}
+function mgrp(m){switch(m.t){case 'cmd':return m.c==='fill'?'d':'t';case 'nt':case 'au':return m.i==='y'?'y':m.i==='g'?'g':'b';case 'tp':return 'd';case 'so':var sz=soloClean(m.z).charAt(0);return sz||'t';case 'lp':case 'lc':case 'lf':case 'lx':return 'l';case 'cg':return 'c';case 'rl':case 'ks':case 'kl':case 'ko':case 'kz':var rg=String(m.g||'').charAt(0);return rg==='b'||rg==='y'||rg==='d'||rg==='g'?rg:'x'}return ''}
 function pcan(c,g){return !!g&&!c._wait&&!c._gone&&String(c._pm||'').indexOf(g)>=0}
 function mk(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
 /* -- côté master -- */
@@ -4078,7 +4083,7 @@ function padLaunch(r,i,seq){
     else if(g==='g'){cur.G.pat=copy(d.s.G.pat);cur.G.len=d.s.G.len;m.s.G=cur.G}
     else{cur.D.pat=copy(d.s.D.pat);m.s.D=cur.D}
   }else{m.s=copy(d.s);for(k in d.p)m.p[k]=d.p[k]}
-  qst=qst.filter(function(x){return !(x.pad&&x.row===r)}); /* un nouveau choix remplace celui qui attendait */
+  qst=qst.filter(function(x){return !(x.pad&&x.row===r)&&x.ghost!==r});GHQ[r]=0; /* un nouveau choix remplace celui qui attendait (pad ou silence) */
   PADQ[r]=i;
   if(playing)qst.push({local:g,m:m,pad:1,row:r});else cueTake(g,m,1);
   padUI();
@@ -4101,6 +4106,20 @@ function offUI(){['b','y','g','d'].forEach(function(g){var r=g==='d'||g==='g'?g:
     b.hidden=!off;b.classList.toggle('pend',pend);b.disabled=!can(g);
     var nm=rname(r);b.title=pend?nm+' : réactivé à la prochaine mesure (toucher pour garder le mute)':nm+' en mute : toucher pour réactiver';b.setAttribute('aria-label',b.title)});PADG.forEach(function(g){var l=$('kl-'+g);l.classList.toggle('off',OFFG[g]);l.setAttribute('aria-pressed',OFFG[g]?'false':'true')});padUI()}
 function lstop(k){lact.slice().forEach(function(x){if(x._k===k){try{x.stop()}catch(e){}}})}
+/* Pad fantôme (∅, au bout de chaque ligne) : un pad vide qui fait taire la ligne au début de la mesure suivante
+   (tout de suite à l'arrêt). N'importe quel pad de la ligne, y compris celui qui était en place, la relance. */
+var GHQ={};
+function ghostFire(r){GHQ[r]=0;if(!playing||!ctx){setOff(r,true);padUI();return}
+  var dl=Math.max(0,(nextTime-ctx.currentTime)*1000-10);setTimeout(function(){setOff(r,true);padUI()},dl)}
+function padGhost(r){
+  if(!can(r.charAt(0)))return;
+  if(NET.role==='guest'){if(!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}netSend({t:'kz',g:r});if(!OFFG[r]&&playing)GHQ[r]=Date.now();kmsg(rname(r)+(playing&&!OFFG[r]?' : silence à la prochaine mesure':' : silence'));padUI();return}
+  qst=qst.filter(function(x){return !(x.pad&&x.row===r)&&x.ghost!==r});PADQ[r]=-1;
+  if(OFFG[r]){GHQ[r]=0;setOff(r,true);kmsg(rname(r)+' : silence');padUI();return} /* déjà muette : elle le reste, une relance en attente est annulée */
+  if(playing){GHQ[r]=1;qst.push({ghost:r});kmsg(rname(r)+' : silence à la prochaine mesure')}else{setOff(r,true);kmsg(rname(r)+' : silence')}
+  padUI();
+}
+function ghostPend(r){var v=GHQ[r];return !OFFG[r]&&(v===1||(v>1&&Date.now()-v<5000))}
 function padTap(g,i){
   if(!can(g.charAt(0)))return;
   var d=PADS[g][i],name=rname(g)+' · pad '+(i+1),guest=NET.role==='guest';
@@ -4108,7 +4127,9 @@ function padTap(g,i){
   if(padArm==='del'){padArm='';if(d){if(guest)netSend({t:'ks',g:g,k:i,d:null});else padSet(g,i,null);kmsg(name+' effacé')}padUI();return}
   if(padArm==='rec'||!d){padArm='';var nd=padSnap(g);if(guest)netSend({t:'ks',g:g,k:i,d:nd});else padSet(g,i,nd);kmsg(name+' enregistré');padUI();return}
   var same=false;try{same=padSlotKey(g,d)===padCur(g)}catch(e){}
-  if(same){var mv=!OFFG[g]||OFFQ[g];offTap(g,mv);kmsg(rname(g)+(mv?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'));padUI();return} /* le pad en place sert de mute : rien n'est rappelé ni modifié */
+  if(same){ /* le pad en place ne coupe plus rien : s'il a été mis en silence (pad fantôme ou mute), il revient */
+    if(!guest){qst=qst.filter(function(x){return x.ghost!==g});GHQ[g]=0}else GHQ[g]=0;
+    if(OFFG[g]&&!OFFQ[g]){offTap(g,false);kmsg(name+(playing?' : revient à la prochaine mesure':' : revient'))}else kmsg(name+' : déjà en place');padUI();return}
   if(guest){netSend({t:'kl',g:g,k:i,o:PMODE==='seq'?1:0});padPend(g,i)}else padLaunch(g,i,PMODE==='seq');
   kmsg(playing?name+' : à la prochaine mesure':name+' lancé');padUI();
 }
@@ -4146,12 +4167,15 @@ function padUI(){
       var same=false;if(d)try{same=padSlotKey(g,d)===cur}catch(e){}
       act=same&&!OFFG[g];
       if(act&&PADQ[g]===i)PADQ[g]=-1;
-      b.disabled=!ok;b.className='kpad'+(d?'':' empty')+(act?' act':'')+((PADQ[g]===i&&!act)||(same&&OFFQ[g])?' pend':'');
+      b.disabled=!ok;b.className='kpad'+(d?'':' empty')+(act?' act':'')+((PADQ[g]===i&&!act)||(same&&OFFQ[g])||(act&&ghostPend(g))?' pend':'');
       b.setAttribute('aria-pressed',act?'true':'false');
       b.setAttribute('aria-label',rname(g)+' pad '+(i+1)+(d?(act?', en place':', enregistré'):', vide'));
       if(b._d!==d){b._d=d;while(b.lastChild&&b.lastChild!==b.firstChild)b.removeChild(b.lastChild);if(d)try{b.appendChild(padSvg(g,d))}catch(e){}}
     }
   });
+  PADG.forEach(function(g){var z=$('kz-'+g),ok=can(g.charAt(0))&&!(NET.role==='guest'&&(NET.wait||NET.denied)),on=!!OFFG[g]&&!OFFQ[g],pd=ghostPend(g);
+    z.disabled=!ok;z.className='kpad kghost'+(on?' act':'')+(pd?' pend':'');z.setAttribute('aria-pressed',on?'true':'false');
+    z.setAttribute('aria-label',rname(g)+' : pad vide (silence)'+(on?', en place':pd?', à la prochaine mesure':''));z.title='Pad vide : '+rname(g)+' se tait jusqu\'au prochain pad'});
   vUI();autoUI();zrecUI();PADG.forEach(function(r){if(r.charAt(0)==='y'){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)}});
   RPN.forEach(function(n){$('k-loop'+n).classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest')});if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
@@ -4201,6 +4225,7 @@ function loopSvg(pk){
     var l=mk('button','klab',rname(g));l.type='button';l.id='kl-'+g;l.setAttribute('data-g',g.charAt(0));l.setAttribute('aria-pressed','true');l.title='Mute';grid.appendChild(l);
     l.onclick=function(){var v=!OFFG[g]||OFFQ[g];offTap(g,v);kmsg(rname(g)+(v?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'))};
     for(var i=0;i<PADN;i++)(function(i){var b=mk('button','kpad empty');b.type='button';b.id='kp-'+g+'-'+i;b.setAttribute('data-g',g.charAt(0));b.appendChild(mk('span','kn',i+1));b.onclick=function(){padTap(g,i)};grid.appendChild(b)})(i);
+    var z=mk('button','kpad kghost');z.type='button';z.id='kz-'+g;z.setAttribute('data-g',g.charAt(0));z.onclick=function(){padGhost(g)};grid.appendChild(z);
   });
   var ll=mk('div','klab','Boucles');ll.setAttribute('data-g','l');grid.appendChild(ll);
   LK.forEach(function(k){var b=mk('button','kpad empty');b.type='button';b.id='kp-l-'+k;b.setAttribute('data-g','l');b.appendChild(mk('span','kn',k+1));grid.appendChild(b);
@@ -4212,6 +4237,7 @@ function loopSvg(pk){
       Z.l=true;renderZ();lsel(k);kmsg('Boucle '+(k+1)+' vide : charge-la dans le looper');
       var z=document.querySelector('.zl');try{z.scrollIntoView({block:'start'});window.scrollBy(0,-(tbar.offsetHeight+8))}catch(e){}
     }});
+  grid.appendChild(mk('div','kgap')); /* la ligne des boucles n'a pas de pad fantôme */
   $('k-rec').onclick=function(){padArm=padArm==='rec'?'':'rec';kmsg(padArm?'Touche le pad où enregistrer':'');padUI()};
   $('k-del').onclick=function(){padArm=padArm==='del'?'':'del';kmsg(padArm?'Touche le pad à effacer':'');padUI()};
   function mode(v){PMODE=v;try{localStorage.setItem('lst-padmode',v)}catch(e){}padUI()}
