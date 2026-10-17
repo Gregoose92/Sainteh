@@ -149,6 +149,8 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .sing{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:10px}
 .sing h2{font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;margin:0}
 .sing .chk{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px}
+#acc .chk{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)}
+#acc .chk input{width:18px;height:18px;accent-color:var(--c-m)}
 .sing .hint:empty{display:none}
 #b-sing-st,#y-sing-st{font-family:var(--f-mono);font-size:13px;color:var(--ink)}
 .gen h2{font-family:var(--f-display);font-size:13px;font-weight:400;letter-spacing:.1em;margin:0}
@@ -473,6 +475,7 @@ html.fsl,html.fsl body{overflow:hidden}
       <section class="npanel" id="acc" hidden aria-labelledby="acc-t">
         <div class="nphead"><h3 id="acc-t">Accès des invités</h3><span class="lbl" id="acc-n" role="status"></span></div>
         <p class="hint">Toi, le master, tu peux tout. Un invité ne touche que les instruments cochés sur sa ligne : touche une case pour l'ouvrir ou la fermer.</p>
+        <label class="lbl chk"><input type="checkbox" id="n-valid" checked> Valider chaque nouvel invité (Accepter / Refuser)</label>
         <div id="reqs"></div>
         <div id="n-guests"></div>
       </section>
@@ -1103,7 +1106,7 @@ html.fsl,html.fsl body{overflow:hidden}
     </section>
   </section>
 </main>
-<div id="reqbar" role="status" hidden><span id="reqbar-t"></span><button class="btn" id="reqbar-go">Répondre</button></div>
+<div id="reqbar" role="status" hidden><span id="reqbar-t"></span><button class="btn" id="reqbar-ok" hidden>Accepter</button><button class="btn" id="reqbar-go">Répondre</button></div>
 
 <script>
 (function(){
@@ -3258,7 +3261,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=68; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=69; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3367,14 +3370,18 @@ function hostRx(c,m){
     case 'hi':
       netFlush();c._ok=true;if((m.b|0)>BUILD){NET.upd=m.b|0;nver()} /* un invité a une version plus récente : elle existe donc */
       var gid=String(m.id||c._id).slice(0,40),a=ACC[gid],nm=gname(m.n);c._gid=gid;if(nm)nm=nameFree(nm,gid);
-      /* Sans restriction : tout invité entre directement, avec tous les instruments et le live. Le master peut encore le retirer. */
+      /* Validation (réglage du master, par défaut) : un nouvel invité attend Accepter ou Refuser ; un invité déjà accepté pendant
+         cette session revient directement avec ses accès (reconnexion, rechargement). Sans validation : il entre avec tout. */
       if(!a)a=ACC[gid]={n:nm||'Invité '+(GN[gid]||(GN[gid]=++gseq))};
-      if(nm)a.n=nm;a.p=PGS;a.lv='byg';a.ok=true;c._pm=PGS;c._lv='byg';c._wait=false;
+      if(nm)a.n=nm;
+      if(a.ok){c._pm=pclean(a.p);c._lv=lclean(a.lv);c._wait=false}
+      else if(JVALID){c._pm='';c._lv='';c._wait=true}
+      else{a.p=PGS;a.lv='byg';a.ok=true;c._pm=PGS;c._lv='byg';c._wait=false}
       c._n=a.n;accSave();
       var s={},p={};inMaster(function(){for(x in SEC)s[x]=JSON.parse(JSON.stringify(SEC[x].get()));for(x in P)if(!PLOC[x])p[x]=P[x]});
       netTo(c,{t:'full',s:s,p:p,pl:playing?1:0,f:fillArmed?1:0,b:BUILD,pm:c._pm,lv:c._lv,w:c._wait?1:0,nm:c._n,vb:VC.b,vy:VC.y});
       vSendAll(c);
-      if(c._wait)reqAdd(c,'');
+      if(c._wait){reqAdd(c,'');try{if(navigator.vibrate)navigator.vibrate([120,60,120])}catch(e){}}
       if((m.b|0)<BUILD)netTo(c,{t:'ms',m:'Cette page est plus ancienne que celle du master : recharge-la pour avoir toutes les fonctions.'});
       LK.forEach(function(q){if(lbuf[q])netLoop(q,c)});
       PADG.forEach(function(g){PADS[g].forEach(function(d,q){if(d)netTo(c,{t:'pd',g:g,i:q,d:d})})});npeers();break;
@@ -3699,7 +3706,8 @@ function mk(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cl
 /* -- côté master -- */
 function accSave(){try{sessionStorage.setItem('lst-acc',JSON.stringify({a:ACC,n:gseq}))}catch(e){}}
 function accLoad(){ACC={};gseq=0;try{var j=JSON.parse(sessionStorage.getItem('lst-acc')||'null');if(j&&j.a&&typeof j.a==='object'){for(var k in j.a){var a=j.a[k];if(a&&a.ok)ACC[k]={n:gname(a.n)||'Invité',p:pclean(a.p),lv:String(a.lv||''),ok:true}}gseq=j.n|0}}catch(e){}}
-function reqDefault(c){var taken='',r='';conns.forEach(function(o){if(o!==c&&o._ok&&!o._wait&&!o._gone)taken+=o._pm});'bylcd'.split('').forEach(function(g){if(taken.indexOf(g)<0)r+=g});return r}
+function reqDefault(c){return PGS} /* tout est coché : le master décoche ce qu'il garde */
+var JVALID=true;try{JVALID=localStorage.getItem('lst-valid')!=='0'}catch(e){}
 /* Deux invités présents ne portent jamais le même nom à l'écran du master : le second reçoit un numéro. */
 function nameFree(n,gid){
   var used={};conns.forEach(function(o){if(o._ok&&!o._gone&&o._gid!==gid&&o._n)used[String(o._n).toLowerCase()]=1});
@@ -3743,7 +3751,7 @@ function reqDone(r,ok){
 function permGive(c,p){
   p=pclean(p);var a=ACC[c._gid]||(ACC[c._gid]={n:c._n});a.p=p;a.ok=true;accSave();
   conns.forEach(function(o){
-    if(o._gid!==c._gid||o._gone)return;o._pm=p;o._wait=false;
+    if(o._gid!==c._gid||o._gone)return;var was=o._wait;o._pm=p;o._wait=false;if(was)o._lv=lclean(p); /* nouvel invité accepté : le live suit ses instruments */
     if(p.indexOf('b')<0)liveOff('b',o._id);if(p.indexOf('y')<0)liveOff('y',o._id);if(p.indexOf('g')<0)liveOff('g',o._id);
     o._lv=lclean(o._lv).split('').filter(function(g){return p.indexOf(g)>=0}).join('');a.lv=o._lv; /* sans accès à l'instrument, plus de live dessus */
     if(p.indexOf('l')<0)for(var id in nfiles)if(nfiles[id].c===o)delete nfiles[id];
@@ -3795,9 +3803,13 @@ function reqUI(){
 function accVisible(){if(!Z.m||CFS)return false;var r=$('reqs').getBoundingClientRect();return r.height>0&&r.top<window.innerHeight-70&&r.bottom>tbar.offsetHeight+40}
 function reqBar(){
   var n=NET.role==='host'?REQ.length:0,bar=$('reqbar');
+  var r0=n?REQ[0]:null;$('reqbar-ok').hidden=!(r0&&!r0.live&&r0.c._wait);
   if(n)$('reqbar-t').textContent=n>1?n+' demandes en attente':REQ[0].live?REQ[0].c._n+' veut prendre le live sur '+LVN[REQ[0].live]:REQ[0].c._wait?REQ[0].c._n+' veut rejoindre':REQ[0].c._n+' demande : '+pnames(REQ[0].want);
   bar.hidden=!n||accVisible();
 }
+$('reqbar-ok').onclick=function(){var r=REQ[0];if(r&&!r.live&&r.c._wait)reqDone(r,true)};
+(function(){var v=$('n-valid');v.checked=JVALID;v.onchange=function(){JVALID=v.checked;try{localStorage.setItem('lst-valid',JVALID?'1':'0')}catch(e){}
+  nmsg(JVALID?'Chaque nouvel invité attendra ta validation.':'Les nouveaux invités entrent directement, avec tous les instruments.')}})();
 $('reqbar-go').onclick=function(){
   if(CFS)cfsSet(false);kfsSet('');
   Z.m=true;renderZ();$('acc').scrollIntoView({block:'start'});reqBar();
