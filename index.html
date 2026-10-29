@@ -3261,7 +3261,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=69; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=70; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4463,6 +4463,14 @@ function netBoot(){
 P.dtune=D.tu[D.sel];P.ddec=D.de[D.sel];P.lvol=L.slots[L.sel].vol;P.lstart=L.slots[L.sel].start;P.lrate=L.slots[L.sel].rate;
 KN.forEach(function(k){drawKnob(k.id)});
 renderB();
+/* Premier lancement sur cet appareil (rien d'enregistré) : page vierge, toutes les séquences vides en 16 pas.
+   Les réglages de son restent ceux d'usine. (lst-demo=1 garde le contenu de démonstration, pour les tests.) */
+(function(){var demo=false;try{demo=localStorage.getItem('lst-demo')==='1'}catch(e){}
+  if((typeof sv!=='undefined'&&sv)||demo)return;
+  pat=vRest();BL=16;sel=0;Y.pat=vRest();Y.len=16;Y.sel=0;
+  GT.pat=GT.pat.map(function(){return GS(0,0,0,0,0,0,0,0)});GT.len=16;GT.sel=0;
+  ['A','B','C','D'].forEach(function(v){D.pat[v]=emptyPat()});D.v='A';D.chain=0;
+})();
 renderLen();refresh();renderDrums();renderY();renderG();renderL();renderZ();drawScope();requestAnimationFrame(frame);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(redraw);
 netBoot();
