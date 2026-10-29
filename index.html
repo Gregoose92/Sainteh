@@ -407,6 +407,26 @@ html.fsl,html.fsl body{overflow:hidden}
 .zt i::before{content:"▾"}
 .zone.shut .zt i::before{content:"▸"}
 .zone.shut>*:not(h2){display:none}
+/* ----- navigation : accueil = pads + boutons d'instruments ; un instrument s'ouvre seul, avec « Retour » en haut ----- */
+.nav .zone{display:none}
+.nav[data-view="home"] .zk,.nav[data-view="b"] .zb,.nav[data-view="y"] .zy,.nav[data-view="g"] .zg,.nav[data-view="l"] .zl,.nav[data-view="c"] .zc,.nav[data-view="d"] .zd,.nav[data-view="m"] .zn{display:flex}
+.nav .zt i{display:none}.nav .zt{cursor:default}
+.ihub,.vback{display:none}
+.nav[data-view="home"] .ihub{display:grid}
+.nav:not([data-view="home"]) .vback{display:flex}
+.ihub{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.itile{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:6px;min-height:84px;padding:12px 14px;border-radius:10px;border:1px solid color-mix(in srgb,var(--tc) 55%,var(--line));background:color-mix(in srgb,var(--tc) 12%,var(--panel));color:var(--ink);font:inherit;text-align:left;cursor:pointer;touch-action:manipulation;overflow:hidden}
+.itile b{font-family:var(--f-display);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--tc)}
+.itile small{font-size:12px;color:var(--ink-soft)}
+.itile .im{position:absolute;left:0;bottom:0;height:4px;width:100%;background:var(--tc);transform-origin:left center;transform:scaleX(0)}
+.itile.off{opacity:.55}.itile.off b::after{content:" · mute";font-family:var(--f-body);font-size:11px;letter-spacing:.05em}
+.itile[hidden]{display:none}
+.vback{align-items:center;gap:12px;flex-wrap:wrap}
+.vback .btn{font-size:15px;padding:10px 16px}
+.vback span{font-family:var(--f-display);letter-spacing:.08em;color:var(--ink-soft);font-size:13px}
+.vpick .modegrid{grid-template-columns:repeat(3,1fr)}
+@media (max-width:480px){.vpick .modegrid{grid-template-columns:1fr}}
+.vpick .modecard b{color:var(--tc)}
 /* version Rookie : une seule basse, un seul synthé */
 .rookie .vtabs,.rookie .kgrid [data-row$="1"],.rookie .kgrid [data-row$="2"]{display:none!important}
 .modeov{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -423,6 +443,7 @@ html.fsl,html.fsl body{overflow:hidden}
 #mode-btn,#clr-all{font-size:12px;padding:5px 10px}
 /* mode Découvrir : les instruments apparaissent un par un, avec un petit guide */
 .zone.dhide{display:none!important}
+.disc .machine{margin-bottom:230px} /* le guide et le ➕ ne cachent pas le bas de la page */
 /* Découvrir : pas de générateur, mais Décaler / Effacer restent */
 .disc .gen>h2,.disc .gen .gengrid,.disc #b-gen,.disc #b-mut,.disc #y-gen,.disc #y-mut,.disc #g-gen,.disc #g-mut,.disc #d-gen,.disc #d-mut{display:none!important}
 .dfab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:80;display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:999px;border:0;background:var(--c-m);color:#fff;font:700 15px/1 var(--f-body);letter-spacing:.03em;box-shadow:0 6px 22px rgba(0,0,0,.35);cursor:pointer;touch-action:manipulation}
@@ -487,6 +508,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
   </div>
 
+  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span></div>
   <section class="zone zn">
     <h2><button class="zt" id="zt-m" aria-expanded="false"><span>À PLUSIEURS</span><i aria-hidden="true"></i></button><div class="lbl nstat" id="n-stat">Solo</div></h2>
     <div class="editor" id="n-solo">
@@ -572,6 +594,16 @@ html.fsl,html.fsl body{overflow:hidden}
     </div>
     <p class="hint">Loop : maintiens un bouton pour répéter les derniers pas joués, relâche pour reprendre.</p>
   </section>
+
+  <div class="ihub" id="ihub" role="group" aria-label="Instruments">
+    <button class="itile" id="it-d" type="button" style="--tc:var(--ink)"><b>RYTHMES</b><small id="it-d-s">Boîte à rythmes</small><i class="im" id="it-d-m"></i></button>
+    <button class="itile" id="it-b" type="button" style="--tc:var(--c-b)"><b>BASSLINE</b><small id="it-b-s">Basse 303</small><i class="im" id="it-b-m"></i></button>
+    <button class="itile" id="it-y" type="button" style="--tc:var(--c-y)"><b>SYNTHÉ</b><small id="it-y-s">Synthé lead</small><i class="im" id="it-y-m"></i></button>
+    <button class="itile" id="it-g" type="button" style="--tc:var(--c-g)"><b>GUITARE</b><small id="it-g-s">Guitare électrique</small><i class="im" id="it-g-m"></i></button>
+    <button class="itile" id="it-l" type="button" style="--tc:var(--c-l)"><b>LOOPER</b><small id="it-l-s">Looper voix</small><i class="im" id="it-l-m"></i></button>
+    <button class="itile" id="it-c" type="button" style="--tc:var(--c-c)"><b>CONGAS</b><small id="it-c-s">Percussions</small><i class="im" id="it-c-m"></i></button>
+    <button class="itile" id="it-m" type="button" style="--tc:var(--c-m)"><b>À PLUSIEURS</b><small id="it-m-s">Jouer en session</small></button>
+  </div>
 
   <section class="zone zb">
   <h2><button class="zt" id="zt-b" aria-expanded="true"><span>BASSLINE</span><i aria-hidden="true"></i></button><button class="zmute" id="zmu-b" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></button><div class="zv"><input type="range" id="zv-b" min="0" max="100" value="70" aria-label="Volume de la basse"><div class="zm" aria-hidden="true"><i id="zm-b"></i></div></div></h2>
@@ -1161,6 +1193,13 @@ html.fsl,html.fsl body{overflow:hidden}
   <p id="dco-t"></p>
   <div class="actions" id="dco-a"></div>
 </section>
+<div id="vpick" class="modeov vpick" hidden role="dialog" aria-modal="true" aria-labelledby="vpick-t">
+  <div class="modebox">
+    <h2 id="vpick-t">Quelle bassline ?</h2>
+    <div class="modegrid" id="vpick-g"></div>
+    <div class="actions"><button class="btn" id="vpick-x" type="button">Annuler</button></div>
+  </div>
+</div>
 <div id="reqbar" role="status" hidden><span id="reqbar-t"></span><button class="btn" id="reqbar-ok" hidden>Accepter</button><button class="btn" id="reqbar-go">Répondre</button></div>
 
 <script>
@@ -1980,7 +2019,7 @@ function zmeter(){
   for(var k in zan){var a=zan[k],pk=0,i;
     if(a.getFloatTimeDomainData){a.getFloatTimeDomainData(zbuf);for(i=0;i<256;i++){var v=zbuf[i]<0?-zbuf[i]:zbuf[i];if(v>pk)pk=v}}
     var lv=Math.max(pk,zlv[k]*.88);if(lv<.002)lv=0;
-    if(lv!==zlv[k]){zlv[k]=lv;$('zm-'+k).style.transform='scaleX('+Math.min(1,lv).toFixed(3)+')'}
+    if(lv!==zlv[k]){zlv[k]=lv;var sx='scaleX('+Math.min(1,lv).toFixed(3)+')';$('zm-'+k).style.transform=sx;var im=$('it-'+k+'-m');if(im)im.style.transform=sx}
   }
 }
 var netB=-1,netY=-1,netV='A',netN=0,clv=0;
@@ -3300,7 +3339,7 @@ try{Z=JSON.parse(localStorage.getItem('acidline16z')||'null')}catch(e){}
 if(!Z||typeof Z!=='object')Z=window.innerWidth<=700?{b:true,y:false,l:false,d:false}:{b:true,y:true,l:true,d:true,c:true};
 if(Z.k===undefined)Z.k=true;if(Z.g===undefined)Z.g=true; /* la nouvelle zone guitare s'ouvre la première fois */ /* la zone des pads est ouverte tant qu'on ne l'a pas repliée */
 function renderZ(){Object.keys(ZK).forEach(function(k){document.querySelector('.'+ZK[k]).classList.toggle('shut',!Z[k]);$('zt-'+k).setAttribute('aria-expanded',!!Z[k])});redraw()}
-Object.keys(ZK).forEach(function(k){$('zt-'+k).onclick=function(){
+Object.keys(ZK).forEach(function(k){$('zt-'+k).onclick=function(){if(NAV)return;
   Z[k]=!Z[k];try{localStorage.setItem('acidline16z',JSON.stringify(Z))}catch(e){}
   renderZ();var r=document.querySelector('.'+ZK[k]).getBoundingClientRect(),h=tbar.offsetHeight;if(r.top<h)window.scrollBy(0,r.top-h-4);
 }});
@@ -3319,7 +3358,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=75; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=76; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -3870,7 +3909,7 @@ $('reqbar-ok').onclick=function(){var r=REQ[0];if(r&&!r.live&&r.c._wait)reqDone(
   nmsg(JVALID?'Chaque nouvel invité attendra ta validation.':'Les nouveaux invités entrent directement, avec tous les instruments.')}})();
 $('reqbar-go').onclick=function(){
   if(CFS)cfsSet(false);kfsSet('');
-  Z.m=true;renderZ();$('acc').scrollIntoView({block:'start'});reqBar();
+  Z.m=true;renderZ();if(NAV)viewOpen('m');$('acc').scrollIntoView({block:'start'});reqBar();
 };
 (function(){var w=0;function chk(){if(w||!REQ.length)return;w=requestAnimationFrame(function(){w=0;reqBar()})}
   window.addEventListener('scroll',chk,{passive:true});window.addEventListener('resize',chk)})();
@@ -4295,7 +4334,7 @@ function padUI(){
   PADG.forEach(function(g){var z=$('kz-'+g),ok=can(g.charAt(0))&&!(NET.role==='guest'&&(NET.wait||NET.denied)),on=!!OFFG[g]&&!OFFQ[g],pd=ghostPend(g);
     z.disabled=!ok;z.className='kpad kghost'+(on?' act':'')+(pd?' pend':'');z.setAttribute('aria-pressed',on?'true':'false');
     z.setAttribute('aria-label',rname(g)+' : pad vide (silence)'+(on?', en place':pd?', à la prochaine mesure':''));z.title='Pad vide : '+rname(g)+' se tait jusqu\'au prochain pad'});
-  vUI();autoUI();zrecUI();rowVolUI();PADG.forEach(function(r){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)});
+  vUI();autoUI();zrecUI();rowVolUI();try{hubUI()}catch(e){}PADG.forEach(function(r){var l=$('kl-'+r);if(l&&l.textContent!==rname(r))l.textContent=rname(r)});
   RPN.forEach(function(n){$('k-loop'+n).classList.toggle('wait',(!playing||RP.fail)&&NET.role!=='guest')});if(!RP.ls)rpLabel();
   /* ligne des boucles : un appui joue la boucle une fois */
   var okl=can('l')&&!(NET.role==='guest'&&(NET.wait||NET.denied)),now=Date.now();
@@ -4529,6 +4568,42 @@ renderB();
   GT.pat=GT.pat.map(function(){return GS(0,0,0,0,0,0,0,0)});GT.len=16;GT.sel=0;
   ['A','B','C','D'].forEach(function(v){D.pat[v]=emptyPat()});D.v='A';D.chain=0;
 })();
+/* ----- NAVIGATION : accueil (pads + tuiles) et une page par instrument ----- */
+var NAV=true,VIEW='home';try{NAV=localStorage.getItem('lst-nav')!=='0'}catch(e){} /* lst-nav=0 : ancienne page unique (tests) */
+var VNAME={b:'Bassline',y:'Synthé',g:'Guitare',l:'Looper voix',c:'Congas',d:'Rythmes',m:'À plusieurs',k:'Pads'};
+function viewOpen(k){
+  if(!NAV)return;if(k==='k')k='home';VIEW=k;document.body.setAttribute('data-view',k);
+  if(k!=='home'){Z[k]=true;renderZ();var n=VNAME[k];if((k==='b'||k==='y')&&!ROOKIE)n=rname(k+VC[k]);$('vback-t').textContent=n}else{Z.k=true;renderZ()}
+  try{window.scrollTo(0,0)}catch(e){}redraw();hubUI();
+}
+function viewIn(el){var z=el&&el.closest&&el.closest('.zone');if(!z)return '';for(var k in ZK)if(z.classList.contains(ZK[k]))return k;return ''}
+function hubTap(k){
+  if((k==='b'||k==='y')&&!ROOKIE){vpickOpen(k);return}
+  if((k==='b'||k==='y')&&VC[k]!==0)vSel(k,0);
+  viewOpen(k);
+}
+function vpickOpen(g){
+  var box=$('vpick-g');box.textContent='';$('vpick-t').textContent=g==='b'?'Quelle bassline ?':'Quel synthé ?';
+  for(var v=0;v<3;v++)(function(v){var r=g+v,b=mk('button','modecard');b.type='button';b.style.setProperty('--tc',g==='b'?'var(--c-b)':'var(--c-y)');
+    b.setAttribute('aria-pressed',v===VC[g]?'true':'false');
+    var t=mk('b','',(g==='b'?'Basse ':'Synthé ')+(v+1)),sm=mk('span','',(vHasNotes(g,v)?'Des notes écrites':'Vide')+(OFFG[r]?' · en mute':'')+(v===VC[g]?' · ouvert dernièrement':''));
+    b.appendChild(t);b.appendChild(sm);b.onclick=function(){$('vpick').hidden=true;if(v!==VC[g])vSel(g,v);viewOpen(g)};box.appendChild(b)})(v);
+  $('vpick').hidden=false;try{box.querySelector('[aria-pressed="true"]').focus()}catch(e){}
+}
+$('vpick-x').onclick=function(){$('vpick').hidden=true};
+$('vpick').addEventListener('click',function(e){if(e.target===this)this.hidden=true});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('vpick').hidden)$('vpick').hidden=true});
+['d','b','y','g','l','c','m'].forEach(function(k){$('it-'+k).onclick=function(){hubTap(k)}});
+$('vback-b').onclick=function(){viewOpen('home')};
+function hubUI(){
+  if(!NAV)return;
+  ['d','b','y','g','l','c','m'].forEach(function(k){var t=$('it-'+k);
+    t.hidden=MODE==='disc'&&typeof DORD!=='undefined'&&DORD.indexOf(k)>=DISC.n&&!(k==='m'&&NET.role!=='solo');
+    var r=k==='d'||k==='g'?k:(k==='b'||k==='y')?k+VC[k]:'';t.classList.toggle('off',!!(r&&OFFG[r]&&(k==='d'||k==='g'||ROOKIE)));
+    if(k==='b'||k==='y'){var n=0;for(var v=0;v<3;v++)if(vHasNotes(k,v))n++;$('it-'+k+'-s').textContent=ROOKIE?(vHasNotes(k,0)?'Des notes écrites':'Vide'):'3 voix · '+n+' avec des notes'}});
+  if(VIEW!=='home'&&(VIEW==='b'||VIEW==='y'))$('vback-t').textContent=ROOKIE?VNAME[VIEW]:rname(VIEW+VC[VIEW]);
+}
+if(NAV){document.body.classList.add('nav');document.body.setAttribute('data-view','home');try{if(/^#[A-Z2-9]{5}$/.test(location.hash))VIEW='m'}catch(e){}}
 /* ----- TOUT EFFACER : vide les séquences de toutes les pistes (basses 1-3, synthés 1-3, guitare, rythmes A-D), en 16 pas.
    Les sons, presets, pads et boucles du looper sont gardés. Premier appui : confirmation ; ensuite « Annuler » pendant 10 s. ----- */
 var CLRA={arm:0,undo:null,t:0};
@@ -4574,7 +4649,7 @@ function modeApply(){
 }
 function modeSet(m){var was=MODE;MODE=m;ROOKIE=m==='rookie'||m==='disc';try{localStorage.setItem('lst-mode',m)}catch(e){}$('modeov').hidden=true;
   if(m==='disc'&&was!=='disc'){DISC={n:1,s:0};DHID=false;discSave();Z.d=true;try{localStorage.setItem('acidline16z',JSON.stringify(Z))}catch(e){}renderZ()} /* on (re)commence le tuto par la boîte à rythmes */
-  modeApply();if(m==='disc'){discShow(true);return}
+  modeApply();if(m==='disc'){if(NAV)viewOpen('d');discShow(true);return}
   kmsg(ROOKIE?'Version Rookie : une basse et un synthé':'Version Pro : 3 basses et 3 synthés');toast(ROOKIE?'Version Rookie : l\'essentiel.':'Version Pro : tout l\'instrument.')}
 /* ----- DÉCOUVRIR : un tuto, instrument par instrument. Seuls les instruments déjà ajoutés sont affichés ; ➕ ajoute le suivant. ----- */
 var DORD=['d','b','y','g','k','l','c','m'],DNAME={d:'la boîte à rythmes',b:'la Bassline',y:'le Synthé',g:'la guitare',k:'les pads',l:'le looper voix',c:'les congas',m:'le jeu à plusieurs'};
@@ -4633,13 +4708,14 @@ function discShow(scroll){
   else if(!st.end){var nx=mk('button','btn',st.w||st.c?'Passer':'Suivant');nx.type='button';nx.onclick=function(){discNext()};a.appendChild(nx)}
   if(st.c){try{DBASE=st.c()}catch(e){DBASE=0}}
   discHL(st.el||null);
+  if(NAV&&st.el&&$(st.el)){var vk=viewIn($(st.el));if(vk&&vk!==VIEW&&!(vk==='k'&&VIEW==='home'))viewOpen(vk)}
   if(scroll&&st.el&&$(st.el)){var z=$(st.el).closest('.zone');if(z&&z.classList.contains('shut')){var zk=Object.keys(ZK).find(function(q){return ZK[q]&&z.classList.contains(ZK[q])});if(zk){Z[zk]=true;renderZ()}}
     try{$(st.el).scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}
 }
 function discNext(){var st=DSTEPS[discCur()];if(DISC.s<st.length-1){DISC.s++;discSave();discShow(true)}}
 function discAdd(){
   if(DISC.n>=DORD.length)return;DISC.n++;DISC.s=0;DHID=false;discSave();var k=discCur();
-  Z[k]=true;try{localStorage.setItem('acidline16z',JSON.stringify(Z))}catch(e){}renderZ();discApply();
+  Z[k]=true;try{localStorage.setItem('acidline16z',JSON.stringify(Z))}catch(e){}renderZ();discApply();if(NAV)viewOpen(k);
   var z=document.querySelector('.'+ZK[k]);try{z.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){}
   setTimeout(function(){discShow(true)},350);
 }
@@ -4656,6 +4732,7 @@ $('modeov').addEventListener('click',function(e){if(e.target===this&&localStorag
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('modeov').hidden){var m='';try{m=localStorage.getItem('lst-mode')}catch(x){}if(m)$('modeov').hidden=true}});
 (function(){var m='';try{m=localStorage.getItem('lst-mode')||''}catch(e){}if(m!=='rookie'&&m!=='pro'&&m!=='disc'){$('modeov').hidden=false;try{$('mode-disc').focus()}catch(e){}}})();
 modeApply();
+if(NAV){if(MODE==='disc'&&VIEW==='home')VIEW=DORD[DISC.n-1]==='k'?'home':DORD[DISC.n-1];viewOpen(VIEW)}
 renderLen();refresh();renderDrums();renderY();renderG();renderL();renderZ();drawScope();requestAnimationFrame(frame);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(redraw);
 netBoot();
