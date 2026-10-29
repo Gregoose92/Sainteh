@@ -413,13 +413,32 @@ html.fsl,html.fsl body{overflow:hidden}
 .modeov[hidden]{display:none}
 .modebox{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;max-width:560px;width:100%;max-height:calc(100vh - 32px);overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
 .modebox h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:17px;letter-spacing:.06em}
-.modegrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modegrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.modebox{max-width:720px}
 @media (max-width:480px){.modegrid{grid-template-columns:1fr}}
 .modecard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:14px;border-radius:10px;border:2px solid var(--line);background:var(--btn);color:var(--ink);font:inherit;cursor:pointer;touch-action:manipulation}
 .modecard b{font-family:var(--f-display);font-weight:400;font-size:16px;letter-spacing:.05em}
 .modecard span{font-size:13.5px;line-height:1.4;color:var(--ink-soft)}
 .modecard[aria-pressed="true"]{border-color:var(--c-m);box-shadow:inset 0 0 0 1px var(--c-m)}
 #mode-btn,#clr-all{font-size:12px;padding:5px 10px}
+/* mode Découvrir : les instruments apparaissent un par un, avec un petit guide */
+.zone.dhide{display:none!important}
+.dfab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:80;display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:999px;border:0;background:var(--c-m);color:#fff;font:700 15px/1 var(--f-body);letter-spacing:.03em;box-shadow:0 6px 22px rgba(0,0,0,.35);cursor:pointer;touch-action:manipulation}
+.dfab[hidden]{display:none}
+.dfab b{font-size:20px;line-height:1}
+.dfab.go{animation:dfab 1.2s ease-in-out infinite}
+@keyframes dfab{50%{transform:scale(1.07);box-shadow:0 6px 30px color-mix(in srgb,var(--c-m) 70%,transparent)}}
+.dcoach{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:80;width:min(380px,calc(100vw - 32px));background:var(--panel);color:var(--ink);border:2px solid var(--c-m);border-radius:12px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:8px}
+.dcoach[hidden]{display:none}
+.dcoach .dhead{display:flex;align-items:center;gap:8px}
+.dcoach .dhead .lbl{flex:1;color:var(--c-m)}
+.dcoach .dx{border:0;background:none;color:var(--ink-soft);font-size:18px;cursor:pointer;padding:2px 6px}
+.dcoach p{margin:0;font-size:15px;line-height:1.4}
+.dcoach .actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.dhl{outline:3px dashed var(--c-m)!important;outline-offset:3px;animation:dhl 1s ease-in-out infinite}
+@keyframes dhl{50%{outline-color:transparent}}
+@media (prefers-reduced-motion:reduce){.dfab.go,.dhl{animation:none}}
+
 #clr-all.arm{background:var(--led);border-color:var(--led);color:#fff}
 #clr-all.undo{background:var(--c-m);border-color:var(--c-m);color:#fff}
 .zacts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-6px 0 -6px}
@@ -1128,11 +1147,18 @@ html.fsl,html.fsl body{overflow:hidden}
     <h2 id="mode-t">Bienvenue sur Le Saint Teh</h2>
     <p class="hint">Choisis ta version. Tu pourras en changer à tout moment avec le bouton en haut de l'écran.</p>
     <div class="modegrid">
+      <button class="modecard" id="mode-disc" type="button" aria-pressed="false"><b>🧭 Découvrir</b><span>Un petit tuto : on commence par la boîte à rythmes, puis tu ajoutes la bassline, le synthé… avec le bouton ➕ en bas à droite.</span></button>
       <button class="modecard" id="mode-rookie" type="button" aria-pressed="false"><b>🎧 Rookie</b><span>Pour débuter : une basse, un synthé, la guitare, les rythmes, le looper et les pads. L'essentiel, sans te perdre.</span></button>
       <button class="modecard" id="mode-pro" type="button" aria-pressed="false"><b>🔥 Pro</b><span>Tout l'instrument : 3 basses et 3 synthés, chacun avec sa ligne de pads, en plus du reste.</span></button>
     </div>
   </div>
 </div>
+<button class="dfab" id="dfab" type="button" hidden><b aria-hidden="true">➕</b><span id="dfab-t">Ajouter un instrument</span></button>
+<section class="dcoach" id="dcoach" hidden role="status" aria-live="polite">
+  <div class="dhead"><span class="lbl" id="dco-h">Découvrir</span><button class="dx" id="dco-x" type="button" aria-label="Masquer le guide">✕</button></div>
+  <p id="dco-t"></p>
+  <div class="actions" id="dco-a"></div>
+</section>
 <div id="reqbar" role="status" hidden><span id="reqbar-t"></span><button class="btn" id="reqbar-ok" hidden>Accepter</button><button class="btn" id="reqbar-go">Répondre</button></div>
 
 <script>
@@ -1292,7 +1318,7 @@ var VDEF={b:{p:{},pat:vRest(),BL:16,wave:'sawtooth',ftype:'lowpass',lfoT:'cut',p
 KN.forEach(function(k){if(VK.b.indexOf(k.id)>=0)VDEF.b.p[k.id]=k.def;if(VK.y.indexOf(k.id)>=0)VDEF.y.p[k.id]=k.def});
 (function(o){o.pat=vRest();o.len=16;o.wave='sawtooth';o.mute=false;o.ftype='lowpass';o.lfoT='cut';o.chord='off';o.preset='';o.eng='synth'})(VDEF.y.o);
 function vNew(g){return JSON.parse(JSON.stringify(VDEF[g]))}
-var ROOKIE=false;try{ROOKIE=localStorage.getItem('lst-mode')==='rookie'}catch(e){}
+var MODE='';try{MODE=localStorage.getItem('lst-mode')||''}catch(e){}var ROOKIE=MODE==='rookie'||MODE==='disc'; /* Découvrir = Rookie + instruments ajoutés un par un */
 function rowOn(r){return !ROOKIE||!/[12]$/.test(r)} /* rangée visible dans la version choisie */
 function vIdx(x,g){return x===0||x===1||x===2?x:VC[g]}
 function vNorm(g,a){var o=vNew(g),k;if(!a||typeof a!=='object')return o;
@@ -3290,7 +3316,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=72; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=73; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4533,23 +4559,87 @@ $('clr-all').onclick=function(){
 };
 /* ----- version Rookie / Pro : demandée tant qu'aucune n'a été choisie sur cet appareil ----- */
 function modeApply(){
-  document.body.classList.toggle('rookie',ROOKIE);$('mode-btn').textContent=ROOKIE?'🎧 Rookie':'🔥 Pro';
+  document.body.classList.toggle('rookie',ROOKIE);$('mode-btn').textContent=MODE==='disc'?'🧭 Découvrir':ROOKIE?'🎧 Rookie':'🔥 Pro';
   var chosen='';try{chosen=localStorage.getItem('lst-mode')||''}catch(e){} /* rien de surligné tant qu'aucun choix n'est fait */
-  $('mode-rookie').setAttribute('aria-pressed',chosen==='rookie'?'true':'false');$('mode-pro').setAttribute('aria-pressed',chosen==='pro'?'true':'false');
+  $('mode-rookie').setAttribute('aria-pressed',chosen==='rookie'?'true':'false');$('mode-disc').setAttribute('aria-pressed',chosen==='disc'?'true':'false');$('mode-pro').setAttribute('aria-pressed',chosen==='pro'?'true':'false');
   if(ROOKIE){
     ['b','y'].forEach(function(g){if(VC[g]!==0&&!CUE[g])vSel(g,0)}); /* on revient sur Basse 1 / Synthé 1 */
     if(SOLO&&!rowOn(SOLO))soloApply('');
     if(ctx&&ENG[0])vAll(function(g){if(VN[g]>0){if(g==='b')gateOff(ctx.currentTime);else yOff(ctx.currentTime)}}); /* une note tenue sur une voix cachée s'arrête */
   }
-  try{vUI();offUI();soloUI();zrecUI()}catch(e){}padUI();
+  try{vUI();offUI();soloUI();zrecUI()}catch(e){}padUI();discApply();
 }
-function modeSet(m){ROOKIE=m==='rookie';try{localStorage.setItem('lst-mode',m)}catch(e){}$('modeov').hidden=true;modeApply();
+function modeSet(m){var was=MODE;MODE=m;ROOKIE=m==='rookie'||m==='disc';try{localStorage.setItem('lst-mode',m)}catch(e){}$('modeov').hidden=true;
+  if(m==='disc'&&was!=='disc'){DISC={n:1,s:0};DHID=false;discSave();Z.d=true;try{localStorage.setItem('acidline16z',JSON.stringify(Z))}catch(e){}renderZ()} /* on (re)commence le tuto par la boîte à rythmes */
+  modeApply();if(m==='disc'){discShow(true);return}
   kmsg(ROOKIE?'Version Rookie : une basse et un synthé':'Version Pro : 3 basses et 3 synthés');toast(ROOKIE?'Version Rookie : l\'essentiel.':'Version Pro : tout l\'instrument.')}
-$('mode-rookie').onclick=function(){modeSet('rookie')};$('mode-pro').onclick=function(){modeSet('pro')};
-$('mode-btn').onclick=function(){$('modeov').hidden=false;try{$(ROOKIE?'mode-rookie':'mode-pro').focus()}catch(e){}};
+/* ----- DÉCOUVRIR : un tuto, instrument par instrument. Seuls les instruments déjà ajoutés sont affichés ; ➕ ajoute le suivant. ----- */
+var DORD=['d','b','y','g','k','l','c','m'],DNAME={d:'la boîte à rythmes',b:'la Bassline',y:'le Synthé',g:'la guitare',k:'les pads',l:'le looper voix',c:'les congas',m:'le jeu à plusieurs'};
+var DSTEPS={
+  d:[{t:'🥁 Voici la boîte à rythmes. Touche ▶ Lecture, en haut, pour l\'entendre.',el:'play',w:'play'},
+     {t:'Choisis un style, puis touche « Générer les rythmes » : la machine écrit un rythme pour toi.',el:'d-gen',w:'d-gen'},
+     {t:'Touche les cases pour ajouter ou enlever un coup. Les boutons BD, SD, CH… choisissent la piste (grosse caisse, caisse claire, charley…).',el:'pads'},
+     {t:'Bravo, ton beat tourne ! Touche ➕ en bas à droite pour ajouter la Bassline.',end:1}],
+  b:[{t:'🎸 La Bassline, façon 303. Touche « Générer » pour créer une ligne de basse.',el:'b-gen',w:'b-gen'},
+     {t:'Pendant la lecture, tourne Cutoff puis Résonance : c\'est le son acid.',el:'k-cutoff'},
+     {t:'Tu peux aussi jouer en direct sur le clavier live.',el:'lkeys-b'},
+     {t:'Ça groove ! Touche ➕ pour ajouter le Synthé.',end:1}],
+  y:[{t:'🎹 Le Synthé lead. Choisis un son dans la liste des presets.',el:'y-preset',w:'y-preset'},
+     {t:'Touche « Générer » pour une mélodie, un arpège ou des stabs.',el:'y-gen',w:'y-gen'},
+     {t:'Tu as un vrai groupe ! ➕ pour ajouter la guitare.',end:1}],
+  g:[{t:'🎸 La guitare électrique. Choisis un style et touche « Générer ».',el:'g-gen',w:'g-gen'},
+     {t:'Sur un pas, essaie « Glisse → » ou un bend : la note glisse ou monte.',el:'ge-sl'},
+     {t:'➕ pour ajouter les pads.',end:1}],
+  k:[{t:'🟥 Les pads gardent tes motifs. Touche une case « + » pour y ranger ce que tu entends.',el:'kgrid'},
+     {t:'Change de motif, puis touche le pad : il revient au début de la mesure. ∅ fait taire la ligne.',el:'kgrid'},
+     {t:'➕ pour ajouter le looper voix.',end:1}],
+  l:[{t:'🎙 Le looper enregistre ta voix (ou un son) en boucle, calé sur le tempo.',el:'zt-l'},{t:'➕ pour ajouter les congas.',end:1}],
+  c:[{t:'🪘 Les congas : tape sur les peaux pour jouer par-dessus le morceau.',el:'zt-c'},{t:'➕ pour jouer à plusieurs.',end:1}],
+  m:[{t:'👥 À plusieurs : crée une session, et tes amis scannent le QR code pour jouer avec toi.',el:'zt-m'},
+     {t:'🎉 Tu as tout découvert ! Continue avec la version qui te va.',fin:1}]
+};
+var DISC={n:1,s:0},DHL=null,DHID=false;
+try{var dj=JSON.parse(localStorage.getItem('lst-disc')||'null');if(dj&&dj.n>=1&&dj.n<=DORD.length)DISC={n:dj.n|0,s:Math.max(0,dj.s|0)}}catch(e){}
+function discSave(){try{localStorage.setItem('lst-disc',JSON.stringify(DISC))}catch(e){}}
+function discCur(){return DORD[DISC.n-1]}
+function discStep(){var st=DSTEPS[discCur()];return st[Math.min(DISC.s,st.length-1)]}
+function discApply(){
+  var on=MODE==='disc';
+  Object.keys(ZK).forEach(function(k){var z=document.querySelector('.'+ZK[k]);if(!z)return;var i=DORD.indexOf(k);
+    z.classList.toggle('dhide',on&&i>=DISC.n&&!(k==='m'&&NET.role!=='solo'))}); /* en session, le panneau réseau reste visible */
+  $('dfab').hidden=!on||DISC.n>=DORD.length;if(!on){$('dcoach').hidden=true;discHL(null);return}
+  if(DISC.n<DORD.length)$('dfab-t').textContent='Ajouter '+DNAME[DORD[DISC.n]].replace(/^(la |le |les )/,function(x){return x});
+  discShow(false);
+}
+function discHL(id){if(DHL)DHL.classList.remove('dhl');DHL=id?$(id):null;if(DHL)DHL.classList.add('dhl')}
+function discShow(scroll){
+  if(MODE!=='disc')return;var st=discStep(),k=discCur(),a=$('dco-a');
+  $('dfab').classList.toggle('go',!!st.end);
+  if(DHID){$('dcoach').hidden=true;discHL(null);return}
+  $('dcoach').hidden=false;$('dco-h').textContent='Découvrir · '+DISC.n+'/'+DORD.length+' · '+DNAME[k];$('dco-t').textContent=st.t;a.textContent='';
+  if(st.fin){[['Continuer en Rookie','rookie'],['Passer en Pro','pro']].forEach(function(x,i){var b=mk('button','btn'+(i?'':' primary'),x[0]);b.type='button';b.onclick=function(){discHL(null);modeSet(x[1])};a.appendChild(b)})}
+  else if(!st.end){var nx=mk('button','btn',st.w?'Passer':'Suivant');nx.type='button';nx.onclick=function(){discNext()};a.appendChild(nx)}
+  discHL(st.el||null);
+  if(scroll&&st.el&&$(st.el)){var z=$(st.el).closest('.zone');if(z&&z.classList.contains('shut')){var zk=Object.keys(ZK).find(function(q){return ZK[q]&&z.classList.contains(ZK[q])});if(zk){Z[zk]=true;renderZ()}}
+    try{$(st.el).scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}
+}
+function discNext(){var st=DSTEPS[discCur()];if(DISC.s<st.length-1){DISC.s++;discSave();discShow(true)}}
+function discAdd(){
+  if(DISC.n>=DORD.length)return;DISC.n++;DISC.s=0;DHID=false;discSave();var k=discCur();
+  Z[k]=true;try{localStorage.setItem('acidline16z',JSON.stringify(Z))}catch(e){}renderZ();discApply();
+  var z=document.querySelector('.'+ZK[k]);try{z.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){}
+  setTimeout(function(){discShow(true)},350);
+}
+$('dfab').onclick=discAdd;
+$('dco-x').onclick=function(){DHID=true;discShow(false)};
+/* les gestes attendus par le guide font avancer d'une étape */
+document.addEventListener('click',function(e){if(MODE!=='disc')return;var st=discStep();if(!st.w)return;var t=e.target.closest&&e.target.closest('#'+st.w);if(t)setTimeout(discNext,400)},true);
+document.addEventListener('change',function(e){if(MODE!=='disc')return;var st=discStep();if(st.w&&e.target.id===st.w)setTimeout(discNext,300)},true);
+$('mode-rookie').onclick=function(){modeSet('rookie')};$('mode-disc').onclick=function(){modeSet('disc')};$('mode-pro').onclick=function(){modeSet('pro')};
+$('mode-btn').onclick=function(){$('modeov').hidden=false;try{$(MODE==='disc'?'mode-disc':ROOKIE?'mode-rookie':'mode-pro').focus()}catch(e){}};
 $('modeov').addEventListener('click',function(e){if(e.target===this&&localStorage.getItem('lst-mode'))this.hidden=true});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('modeov').hidden){var m='';try{m=localStorage.getItem('lst-mode')}catch(x){}if(m)$('modeov').hidden=true}});
-(function(){var m='';try{m=localStorage.getItem('lst-mode')||''}catch(e){}if(m!=='rookie'&&m!=='pro'){$('modeov').hidden=false;try{$('mode-rookie').focus()}catch(e){}}})();
+(function(){var m='';try{m=localStorage.getItem('lst-mode')||''}catch(e){}if(m!=='rookie'&&m!=='pro'&&m!=='disc'){$('modeov').hidden=false;try{$('mode-disc').focus()}catch(e){}}})();
 modeApply();
 renderLen();refresh();renderDrums();renderY();renderG();renderL();renderZ();drawScope();requestAnimationFrame(frame);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(redraw);
