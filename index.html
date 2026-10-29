@@ -485,6 +485,8 @@ html.fsl,html.fsl body{overflow:hidden}
 @keyframes dhl{50%{outline-color:transparent}}
 @media (prefers-reduced-motion:reduce){.dfab.go,.dhl{animation:none}}
 
+#k-clr.arm{background:var(--led);border-color:var(--led);color:#fff}
+#k-clr.undo{background:var(--c-m);border-color:var(--c-m);color:#fff}
 #clr-all.arm{background:var(--led);border-color:var(--led);color:#fff}
 #clr-all.undo{background:var(--c-m);border-color:var(--c-m);color:#fff}
 .zacts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-6px 0 -6px}
@@ -597,6 +599,7 @@ html.fsl,html.fsl body{overflow:hidden}
     <div class="edrow">
       <button class="btn" id="k-rec" aria-pressed="false">● Enregistrer</button>
       <button class="btn" id="k-del" aria-pressed="false">Effacer</button>
+      <button class="btn" id="k-clr" type="button" title="Vider tous les pads (les boucles du looper restent)">🗑 Vider les pads</button>
       <div class="seg" role="group" aria-label="Ce qu'un pad rappelle">
         <button class="btn" id="k-full">Séquence + son</button>
         <button class="btn" id="k-seq">Séquence seule</button>
@@ -3383,7 +3386,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=78; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=79; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4650,6 +4653,23 @@ document.querySelectorAll('.zone').forEach(function(z){var g=z.querySelector('.g
 if(NAV){document.body.appendChild($('toast'));ytoast=function(m){toast(m)};gtoast=function(m){toast(m)}; /* messages visibles même générateur replié */
   var kmsg0=kmsg;kmsg=function(m){kmsg0(m);if(m&&VIEW!=='home')toast(m)};
   document.body.classList.add('nav');document.body.setAttribute('data-view','home');try{if(/^#[A-Z2-9]{5}$/.test(location.hash))VIEW='m'}catch(e){}}
+/* ----- VIDER LES PADS : tous les pads des instruments (pas les boucles du looper). Deux appuis, puis « Annuler » 10 s. ----- */
+var KCLR={arm:0,undo:null,t:0};
+function kclrPut(src){var guest=NET.role==='guest';PADG.forEach(function(r){if(!can(r.charAt(0)))return;for(var i=0;i<PADN;i++){var d=src?src[r][i]:null;
+  if(JSON.stringify(PADS[r][i])===JSON.stringify(d))continue;if(guest)netSend({t:'ks',g:r,k:i,d:d});else padSet(r,i,d)}});
+  PADG.forEach(function(r){PADQ[r]=-1});qst=qst.filter(function(x){return !x.pad});padUI()}
+function kclrUI(){var b=$('k-clr');b.classList.toggle('arm',!!KCLR.arm);b.classList.toggle('undo',!KCLR.arm&&!!KCLR.undo);
+  b.textContent=KCLR.arm?'⚠ Confirmer ?':KCLR.undo?'↶ Annuler':'🗑 Vider les pads'}
+$('k-clr').onclick=function(){
+  clearTimeout(KCLR.t);var guest=NET.role==='guest';
+  if(guest&&!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}
+  if(KCLR.undo&&!KCLR.arm){kclrPut(KCLR.undo);KCLR.undo=null;kclrUI();kmsg('Pads remis comme avant');return}
+  var any=PADG.some(function(r){return PADS[r].some(function(d){return d})});
+  if(!any){kmsg('Les pads sont déjà vides');return}
+  if(!KCLR.arm){KCLR.arm=1;kclrUI();kmsg('Toucher encore pour vider tous les pads');KCLR.t=setTimeout(function(){KCLR.arm=0;kclrUI()},3500);return}
+  KCLR.arm=0;KCLR.undo=JSON.parse(JSON.stringify(PADS));padArm='';kclrPut(null);kclrUI();kmsg('Pads vidés · « Annuler » pendant 10 s');
+  KCLR.t=setTimeout(function(){KCLR.undo=null;kclrUI()},10000);
+};
 /* ----- TOUT EFFACER : vide les séquences de toutes les pistes (basses 1-3, synthés 1-3, guitare, rythmes A-D), en 16 pas.
    Les sons, presets, pads et boucles du looper sont gardés. Premier appui : confirmation ; ensuite « Annuler » pendant 10 s. ----- */
 var CLRA={arm:0,undo:null,t:0};
