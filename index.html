@@ -419,7 +419,9 @@ html.fsl,html.fsl body{overflow:hidden}
 .modecard b{font-family:var(--f-display);font-weight:400;font-size:16px;letter-spacing:.05em}
 .modecard span{font-size:13.5px;line-height:1.4;color:var(--ink-soft)}
 .modecard[aria-pressed="true"]{border-color:var(--c-m);box-shadow:inset 0 0 0 1px var(--c-m)}
-#mode-btn{font-size:12px;padding:5px 10px}
+#mode-btn,#clr-all{font-size:12px;padding:5px 10px}
+#clr-all.arm{background:var(--led);border-color:var(--led);color:#fff}
+#clr-all.undo{background:var(--c-m);border-color:var(--c-m);color:#fff}
 .zacts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-6px 0 -6px}
 .zsolo{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;margin:0;padding:3px 9px 3px 7px;border-radius:999px;border:1px solid color-mix(in srgb,var(--zc) 45%,var(--line));background:transparent;color:var(--ink-soft);font:600 10px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
 .zsolo svg{width:13px;height:13px}
@@ -454,6 +456,7 @@ html.fsl,html.fsl body{overflow:hidden}
       <button class="btn run" id="play" aria-pressed="false">▶ Lecture</button>
       <button class="btn" id="rew" title="Revenir au premier pas">⏮ Début</button>
       <button class="btn" id="mode-btn" title="Changer de version (Rookie / Pro)">Pro</button>
+      <button class="btn" id="clr-all" title="Vider toutes les pistes (basses, synthés, guitare, rythmes)">🗑 Tout effacer</button>
       <button class="btn primary" id="upd-top" hidden>Mettre à jour</button>
       <span id="astate" class="lbl" role="status" data-ok>Audio en attente</span>
       <div class="bpmed" id="bpm-ed" hidden>
@@ -3287,7 +3290,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=71; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=72; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4497,6 +4500,37 @@ renderB();
   GT.pat=GT.pat.map(function(){return GS(0,0,0,0,0,0,0,0)});GT.len=16;GT.sel=0;
   ['A','B','C','D'].forEach(function(v){D.pat[v]=emptyPat()});D.v='A';D.chain=0;
 })();
+/* ----- TOUT EFFACER : vide les séquences de toutes les pistes (basses 1-3, synthés 1-3, guitare, rythmes A-D), en 16 pas.
+   Les sons, presets, pads et boucles du looper sont gardés. Premier appui : confirmation ; ensuite « Annuler » pendant 10 s. ----- */
+var CLRA={arm:0,undo:null,t:0};
+function clrVoice(g,v,p,len){ /* écrit la séquence d'une basse / d'un synthé, même si ce n'est pas l'onglet ouvert */
+  if(v===VC[g]){if(g==='b'){pat=p;BL=len;if(sel>=BL)sel=0}else{Y.pat=p;Y.len=len;if(Y.sel>=Y.len)Y.sel=0}return}
+  var m={t:'st',s:{},vb:VC.b,vy:VC.y};m['v'+g]=v;
+  if(g==='b')m.s.pat={pat:p,BL:len};else{var o=JSON.parse(JSON.stringify(VS.y[v].o));o.pat=p;o.len=len;m.s.Y=o}
+  netApply(m);if(NET.role!=='solo')netSend(m);
+}
+function clrSnap(){var o={b:[],y:[],G:{pat:copy(GT.pat),len:GT.len},D:{pat:copy(D.pat),chain:D.chain,v:D.v}};
+  ['b','y'].forEach(function(g){for(var v=0;v<3;v++){var a=vPat(g,v);o[g].push({p:copy(a.p),n:a.n})}});return o}
+function clrPut(o){
+  ['b','y'].forEach(function(g){if(!can(g))return;for(var v=0;v<3;v++)clrVoice(g,v,o[g][v].p,o[g][v].n)});
+  if(can('g')){GT.pat=o.G.pat;GT.len=o.G.len;if(GT.sel>=GT.len)GT.sel=0}
+  if(can('d')){D.pat=o.D.pat;D.chain=o.D.chain;D.v=o.D.v}
+  changed();renderLen();ychanged();gchanged();renderDrums();vUI();padUI();save();
+}
+function clrAll(){
+  var empty={b:[],y:[],G:{pat:GT.pat.map(function(){return GS(0,0,0,0,0,0,0,0)}),len:16},D:{pat:{A:emptyPat(),B:emptyPat(),C:emptyPat(),D:emptyPat()},chain:0,v:'A'}};
+  ['b','y'].forEach(function(g){for(var v=0;v<3;v++)empty[g].push({p:vRest(),n:16})});
+  CLRA.undo=clrSnap();clrPut(empty);
+}
+function clrUI(){var b=$('clr-all');b.classList.toggle('arm',!!CLRA.arm);b.classList.toggle('undo',!CLRA.arm&&!!CLRA.undo);
+  b.textContent=CLRA.arm?'⚠ Confirmer ?':CLRA.undo?'↶ Annuler':'🗑 Tout effacer'}
+$('clr-all').onclick=function(){
+  clearTimeout(CLRA.t);
+  if(CLRA.undo&&!CLRA.arm){clrPut(CLRA.undo);CLRA.undo=null;clrUI();toast('Pistes remises comme avant.');kmsg('Effacement annulé');return}
+  if(!CLRA.arm){CLRA.arm=1;clrUI();toast('Toucher encore pour vider toutes les pistes.');CLRA.t=setTimeout(function(){CLRA.arm=0;clrUI()},3500);return}
+  CLRA.arm=0;clrAll();clrUI();toast('Toutes les pistes sont vides. « Annuler » pendant 10 s.');kmsg('Tout effacé : base vide');
+  CLRA.t=setTimeout(function(){CLRA.undo=null;clrUI()},10000);
+};
 /* ----- version Rookie / Pro : demandée tant qu'aucune n'a été choisie sur cet appareil ----- */
 function modeApply(){
   document.body.classList.toggle('rookie',ROOKIE);$('mode-btn').textContent=ROOKIE?'🎧 Rookie':'🔥 Pro';
