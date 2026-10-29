@@ -422,7 +422,7 @@ html.fsl,html.fsl body{overflow:hidden}
 .modecard[aria-pressed="true"]{border-color:var(--c-m);box-shadow:inset 0 0 0 1px var(--c-m)}
 #mode-btn,#clr-all{font-size:12px;padding:5px 10px}
 /* mode Découvrir : les instruments apparaissent un par un, avec un petit guide */
-.zone.dhide{display:none!important}
+.zone.dhide,.disc .gen{display:none!important}
 .dfab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:80;display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:999px;border:0;background:var(--c-m);color:#fff;font:700 15px/1 var(--f-body);letter-spacing:.03em;box-shadow:0 6px 22px rgba(0,0,0,.35);cursor:pointer;touch-action:manipulation}
 .dfab[hidden]{display:none}
 .dfab b{font-size:20px;line-height:1}
@@ -1559,6 +1559,7 @@ function zrecUI(){ZRECZ.forEach(function(z){var b=$('zr-'+z);if(!b)return;var r=
 var SOLO='',SOLOZ=['b','y','g','l','c','d'],SOLON={l:'Looper',c:'Congas'};
 function soloClean(v){v=String(v==null?'':v);return /^(b[0-2]|y[0-2]|g|d|l|c)$/.test(v)?v:''}
 function soloOut(k){return !!SOLO&&k!==SOLO}
+function discOut(k){return typeof MODE!=='undefined'&&MODE==='disc'&&typeof DISC!=='undefined'&&DORD.indexOf(k.charAt(0))>=DISC.n} /* Découvrir : un instrument pas encore ajouté ne joue pas */
 function soloRow(z){return z==='b'||z==='y'?z+VC[z]:z}
 function soloName(r){return SOLON[r]||rname(r)}
 function soloApply(r){r=soloClean(r);if(NET.role==='guest'){netSend({t:'so',z:r});return}if(r===SOLO)return;SOLO=r;applyParams();soloUI();save()}
@@ -1568,7 +1569,7 @@ function soloUI(){SOLOZ.forEach(function(z){var b=$('zs-'+z);if(!b)return;var on
   b.lastChild.textContent=on?'Solo · '+soloName(SOLO):!!SOLO?'Coupé par le solo':'Écouter seul';
   b.title=on?'Toucher pour réécouter tous les instruments':'Écouter seulement '+soloName(r)})}
 function plvl(prm,key,v,t){
-  if(!W&&(OFFG[key]||soloOut(key))){prm.cancelScheduledValues(t);prm.setTargetAtTime(0,t,.02)}
+  if(!W&&(OFFG[key]||soloOut(key)||discOut(key))){prm.cancelScheduledValues(t);prm.setTargetAtTime(0,t,.02)}
   else if(!W&&offAt[key]-.004>t)prm.setTargetAtTime(v,offAt[key]-.004,.001); /* ouvert pile pour le premier temps */
   else prm.setTargetAtTime(v,t,.02);
 }
@@ -1596,7 +1597,7 @@ function aY(t){
 }
 function apply0(){
   var t=ctx.currentTime;
-  lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(soloOut('l')?0:P.lmast*1.6,t,.02);cbus.gain.setTargetAtTime(soloOut('c')?0:P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
+  lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(soloOut('l')||discOut('l')?0:P.lmast*1.6,t,.02);cbus.gain.setTargetAtTime(soloOut('c')||discOut('c')?0:P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
   plvl(drumBus.gain,'d',P.dvol,t);plvl(kickBus.gain,'d',P.dvol*1.5,t);if(lastK!==P.kdrive){lastK=P.kdrive;kshaper.curve=curve(1+P.kdrive*28)}dsend.gain.setTargetAtTime(P.dly*.6,t,.02);rsend.gain.setTargetAtTime(P.rev*.7,t,.02);
   dly.delayTime.setTargetAtTime(Math.min(1.9,3*60/bpmOf(P.tempo)/4),t,.05);
   if(W){aB(t);aY(t);return} /* moteur du cue : la seule voix en préparation */
@@ -3316,7 +3317,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=73; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=74; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4575,36 +4576,45 @@ function modeSet(m){var was=MODE;MODE=m;ROOKIE=m==='rookie'||m==='disc';try{loca
   kmsg(ROOKIE?'Version Rookie : une basse et un synthé':'Version Pro : 3 basses et 3 synthés');toast(ROOKIE?'Version Rookie : l\'essentiel.':'Version Pro : tout l\'instrument.')}
 /* ----- DÉCOUVRIR : un tuto, instrument par instrument. Seuls les instruments déjà ajoutés sont affichés ; ➕ ajoute le suivant. ----- */
 var DORD=['d','b','y','g','k','l','c','m'],DNAME={d:'la boîte à rythmes',b:'la Bassline',y:'le Synthé',g:'la guitare',k:'les pads',l:'le looper voix',c:'les congas',m:'le jeu à plusieurs'};
+/* Chaque étape : t (texte), el (élément surligné), et comment on la valide :
+   w = id d'un élément touché (ou changé) ; c + need = un compteur qui doit augmenter de need (notes écrites, coups placés…) ;
+   sinon bouton « Suivant ». Pas de générateur : on apprend en écrivant soi-même. */
+function dHits(k){var p=D.pat[D.v][k];return p.filter(function(x){return x}).length}
+function sNotes(a,n){var c=0;for(var i=0;i<n;i++)if(a[i]&&a[i].g===1)c++;return c}
+function sFlags(a,n,f){var c=0;for(var i=0;i<n;i++)if(a[i]&&a[i].g===1&&f(a[i]))c++;return c}
 var DSTEPS={
-  d:[{t:'🥁 Voici la boîte à rythmes. Touche ▶ Lecture, en haut, pour l\'entendre.',el:'play',w:'play'},
-     {t:'Choisis un style, puis touche « Générer les rythmes » : la machine écrit un rythme pour toi.',el:'d-gen',w:'d-gen'},
-     {t:'Touche les cases pour ajouter ou enlever un coup. Les boutons BD, SD, CH… choisissent la piste (grosse caisse, caisse claire, charley…).',el:'pads'},
+  d:[{t:'🥁 Voici la boîte à rythmes. Touche ▶ Lecture, en haut : c\'est vide pour l\'instant, c\'est toi qui vas écrire le rythme.',el:'play',w:'play'},
+     {t:'La piste BD (grosse caisse) est choisie. Touche les cases 1, 5, 9 et 13 : boum, boum, boum, boum.',el:'pads',c:function(){return dHits(0)},need:3},
+     {t:'À gauche, choisis SD (caisse claire), puis place des coups sur les cases 5 et 13.',el:'strips',c:function(){return dHits(1)},need:1},
+     {t:'Choisis CH (charley fermé) et remplis des cases entre les coups. Une case touchée deux fois fait un accent.',el:'strips',c:function(){return dHits(6)},need:2},
      {t:'Bravo, ton beat tourne ! Touche ➕ en bas à droite pour ajouter la Bassline.',end:1}],
-  b:[{t:'🎸 La Bassline, façon 303. Touche « Générer » pour créer une ligne de basse.',el:'b-gen',w:'b-gen'},
+  b:[{t:'🎸 La Bassline, façon 303. Touche un pas, puis une note du clavier juste en dessous : elle s\'écrit dans le pas. Écris 3 ou 4 notes (« Pas suivant ▶ » pour avancer).',el:'steps',c:function(){return sNotes(pat,BL)},need:3},
+     {t:'Sous un pas, touche A (accent : la note claque) ou S (slide : elle glisse vers la suivante).',el:'steps',c:function(){return sFlags(pat,BL,function(x){return x.a||x.s})},need:1},
      {t:'Pendant la lecture, tourne Cutoff puis Résonance : c\'est le son acid.',el:'k-cutoff'},
-     {t:'Tu peux aussi jouer en direct sur le clavier live.',el:'lkeys-b'},
      {t:'Ça groove ! Touche ➕ pour ajouter le Synthé.',end:1}],
   y:[{t:'🎹 Le Synthé lead. Choisis un son dans la liste des presets.',el:'y-preset',w:'y-preset'},
-     {t:'Touche « Générer » pour une mélodie, un arpège ou des stabs.',el:'y-gen',w:'y-gen'},
+     {t:'Écris une petite mélodie : touche un pas, puis une note du clavier du synthé.',el:'ysteps',c:function(){return sNotes(Y.pat,Y.len)},need:3},
+     {t:'Tu peux aussi jouer en direct sur le clavier live, et appuyer sur ● REC pour l\'enregistrer.',el:'lkeys-y'},
      {t:'Tu as un vrai groupe ! ➕ pour ajouter la guitare.',end:1}],
-  g:[{t:'🎸 La guitare électrique. Choisis un style et touche « Générer ».',el:'g-gen',w:'g-gen'},
-     {t:'Sur un pas, essaie « Glisse → » ou un bend : la note glisse ou monte.',el:'ge-sl'},
+  g:[{t:'🎸 La guitare. Touche un pas, puis une note ; active « Accord » pour un power chord.',el:'gsteps',c:function(){return sNotes(GT.pat,GT.len)},need:2},
+     {t:'Sur une note, essaie « Glisse → » (elle glisse vers la suivante) ou un bend.',el:'ge-sl',c:function(){return sFlags(GT.pat,GT.len,function(x){return x.s||x.b})},need:1},
      {t:'➕ pour ajouter les pads.',end:1}],
   k:[{t:'🟥 Les pads gardent tes motifs. Touche une case « + » pour y ranger ce que tu entends.',el:'kgrid'},
-     {t:'Change de motif, puis touche le pad : il revient au début de la mesure. ∅ fait taire la ligne.',el:'kgrid'},
+     {t:'Change ton motif, puis touche le pad : il revient au début de la mesure. ∅ fait taire la ligne.',el:'kgrid'},
      {t:'➕ pour ajouter le looper voix.',end:1}],
   l:[{t:'🎙 Le looper enregistre ta voix (ou un son) en boucle, calé sur le tempo.',el:'zt-l'},{t:'➕ pour ajouter les congas.',end:1}],
   c:[{t:'🪘 Les congas : tape sur les peaux pour jouer par-dessus le morceau.',el:'zt-c'},{t:'➕ pour jouer à plusieurs.',end:1}],
   m:[{t:'👥 À plusieurs : crée une session, et tes amis scannent le QR code pour jouer avec toi.',el:'zt-m'},
      {t:'🎉 Tu as tout découvert ! Continue avec la version qui te va.',fin:1}]
 };
+var DBASE=0;
 var DISC={n:1,s:0},DHL=null,DHID=false;
 try{var dj=JSON.parse(localStorage.getItem('lst-disc')||'null');if(dj&&dj.n>=1&&dj.n<=DORD.length)DISC={n:dj.n|0,s:Math.max(0,dj.s|0)}}catch(e){}
 function discSave(){try{localStorage.setItem('lst-disc',JSON.stringify(DISC))}catch(e){}}
 function discCur(){return DORD[DISC.n-1]}
 function discStep(){var st=DSTEPS[discCur()];return st[Math.min(DISC.s,st.length-1)]}
 function discApply(){
-  var on=MODE==='disc';
+  var on=MODE==='disc';document.body.classList.toggle('disc',on);if(ctx)applyParams();
   Object.keys(ZK).forEach(function(k){var z=document.querySelector('.'+ZK[k]);if(!z)return;var i=DORD.indexOf(k);
     z.classList.toggle('dhide',on&&i>=DISC.n&&!(k==='m'&&NET.role!=='solo'))}); /* en session, le panneau réseau reste visible */
   $('dfab').hidden=!on||DISC.n>=DORD.length;if(!on){$('dcoach').hidden=true;discHL(null);return}
@@ -4618,7 +4628,8 @@ function discShow(scroll){
   if(DHID){$('dcoach').hidden=true;discHL(null);return}
   $('dcoach').hidden=false;$('dco-h').textContent='Découvrir · '+DISC.n+'/'+DORD.length+' · '+DNAME[k];$('dco-t').textContent=st.t;a.textContent='';
   if(st.fin){[['Continuer en Rookie','rookie'],['Passer en Pro','pro']].forEach(function(x,i){var b=mk('button','btn'+(i?'':' primary'),x[0]);b.type='button';b.onclick=function(){discHL(null);modeSet(x[1])};a.appendChild(b)})}
-  else if(!st.end){var nx=mk('button','btn',st.w?'Passer':'Suivant');nx.type='button';nx.onclick=function(){discNext()};a.appendChild(nx)}
+  else if(!st.end){var nx=mk('button','btn',st.w||st.c?'Passer':'Suivant');nx.type='button';nx.onclick=function(){discNext()};a.appendChild(nx)}
+  if(st.c){try{DBASE=st.c()}catch(e){DBASE=0}}
   discHL(st.el||null);
   if(scroll&&st.el&&$(st.el)){var z=$(st.el).closest('.zone');if(z&&z.classList.contains('shut')){var zk=Object.keys(ZK).find(function(q){return ZK[q]&&z.classList.contains(ZK[q])});if(zk){Z[zk]=true;renderZ()}}
     try{$(st.el).scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}
@@ -4633,7 +4644,9 @@ function discAdd(){
 $('dfab').onclick=discAdd;
 $('dco-x').onclick=function(){DHID=true;discShow(false)};
 /* les gestes attendus par le guide font avancer d'une étape */
-document.addEventListener('click',function(e){if(MODE!=='disc')return;var st=discStep();if(!st.w)return;var t=e.target.closest&&e.target.closest('#'+st.w);if(t)setTimeout(discNext,400)},true);
+var DCHK=0;function discCheck(){clearTimeout(DCHK);DCHK=setTimeout(function(){if(MODE!=='disc')return;var st=discStep();if(st.c){var n=0;try{n=st.c()}catch(e){}if(n-DBASE>=st.need)discNext()}},250)}
+document.addEventListener('click',function(e){if(MODE!=='disc')return;var st=discStep();if(st.c){discCheck();return}if(!st.w)return;var t=e.target.closest&&e.target.closest('#'+st.w);if(t)setTimeout(discNext,400)},true);
+document.addEventListener('pointerup',function(){if(MODE==='disc'&&discStep().c)discCheck()},true); /* claviers live (REC) */
 document.addEventListener('change',function(e){if(MODE!=='disc')return;var st=discStep();if(st.w&&e.target.id===st.w)setTimeout(discNext,300)},true);
 $('mode-rookie').onclick=function(){modeSet('rookie')};$('mode-disc').onclick=function(){modeSet('disc')};$('mode-pro').onclick=function(){modeSet('pro')};
 $('mode-btn').onclick=function(){$('modeov').hidden=false;try{$(MODE==='disc'?'mode-disc':ROOKIE?'mode-rookie':'mode-pro').focus()}catch(e){}};
