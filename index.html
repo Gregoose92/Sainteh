@@ -423,6 +423,23 @@ html.fsl,html.fsl body{overflow:hidden}
 .itile[hidden]{display:none}
 .vback{align-items:center;gap:12px;flex-wrap:wrap}
 .vback .btn{font-size:15px;padding:10px 16px}
+.vback .vtools{margin-left:auto;display:flex;gap:8px}
+.vback .vtools .btn{font-size:13px;padding:8px 12px}
+.vback .vtools[hidden]{display:none}
+#vb-mute[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+#vb-clr.arm{background:var(--led);border-color:var(--led);color:#fff}
+/* générateur (et chant) repliés derrière un petit bouton en bas de chaque instrument */
+.gtog{display:none}
+.nav .gtog{display:inline-flex;align-self:center;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px dashed color-mix(in srgb,var(--zc) 50%,var(--line));background:transparent;color:var(--ink-soft);font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.nav .gtog[aria-expanded="true"]{border-style:solid;color:var(--ink)}
+.nav .zone .gen:not(.gopen),.nav .zone .sing:not(.gopen),.nav.disc .gtog{display:none!important}
+.rookie .cuebar{display:none!important}
+.nav .knobs:not(.kopen) .kadv{display:none}
+.ktog{display:none}
+.nav .ktog{display:inline-flex;align-self:center;margin-top:-6px;padding:5px 14px;border-radius:999px;border:1px solid color-mix(in srgb,var(--zc) 40%,var(--line));background:transparent;color:var(--ink-soft);font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.nav #toast:empty{display:none}
+.nav #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:85;max-width:calc(100vw - 32px);padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--panel);font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.nav.disc #toast{bottom:calc(90px + env(safe-area-inset-bottom,0px))}
 .vback span{font-family:var(--f-display);letter-spacing:.08em;color:var(--ink-soft);font-size:13px}
 .vpick .modegrid{grid-template-columns:repeat(3,1fr)}
 @media (max-width:480px){.vpick .modegrid{grid-template-columns:1fr}}
@@ -508,7 +525,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
   </div>
 
-  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span></div>
+  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span><div class="vtools" id="vtools"><button class="btn" id="vb-mute" type="button" aria-pressed="false">🔇 Mute</button><button class="btn" id="vb-clr" type="button">🗑 Effacer</button></div></div>
   <section class="zone zn">
     <h2><button class="zt" id="zt-m" aria-expanded="false"><span>À PLUSIEURS</span><i aria-hidden="true"></i></button><div class="lbl nstat" id="n-stat">Solo</div></h2>
     <div class="editor" id="n-solo">
@@ -3358,7 +3375,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=76; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=77; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4573,7 +4590,7 @@ var NAV=true,VIEW='home';try{NAV=localStorage.getItem('lst-nav')!=='0'}catch(e){
 var VNAME={b:'Bassline',y:'Synthé',g:'Guitare',l:'Looper voix',c:'Congas',d:'Rythmes',m:'À plusieurs',k:'Pads'};
 function viewOpen(k){
   if(!NAV)return;if(k==='k')k='home';VIEW=k;document.body.setAttribute('data-view',k);
-  if(k!=='home'){Z[k]=true;renderZ();var n=VNAME[k];if((k==='b'||k==='y')&&!ROOKIE)n=rname(k+VC[k]);$('vback-t').textContent=n}else{Z.k=true;renderZ()}
+  VBC.arm=0;if(k!=='home'){Z[k]=true;renderZ();var n=VNAME[k];if((k==='b'||k==='y')&&!ROOKIE)n=rname(k+VC[k]);$('vback-t').textContent=n}else{Z.k=true;renderZ()}
   try{window.scrollTo(0,0)}catch(e){}redraw();hubUI();
 }
 function viewIn(el){var z=el&&el.closest&&el.closest('.zone');if(!z)return '';for(var k in ZK)if(z.classList.contains(ZK[k]))return k;return ''}
@@ -4595,15 +4612,36 @@ $('vpick').addEventListener('click',function(e){if(e.target===this)this.hidden=t
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('vpick').hidden)$('vpick').hidden=true});
 ['d','b','y','g','l','c','m'].forEach(function(k){$('it-'+k).onclick=function(){hubTap(k)}});
 $('vback-b').onclick=function(){viewOpen('home')};
+/* barre du haut d'un instrument : Mute et Effacer pour ce qu'on édite (la voix ouverte en Pro) */
+var VBC={arm:0,t:0};
+function vRow(){return VIEW==='b'||VIEW==='y'?VIEW+VC[VIEW]:VIEW==='g'||VIEW==='d'?VIEW:''}
+function vbackUI(){var r=vRow(),t=$('vtools');t.hidden=!r;if(!r)return;var off=!!OFFG[r]&&!OFFQ[r],pend=!!OFFG[r]&&!!OFFQ[r];
+  var m=$('vb-mute');m.setAttribute('aria-pressed',off||pend?'true':'false');m.textContent=pend?'⏳ Revient…':off?'🔊 Réactiver':'🔇 Mute';m.disabled=!can(VIEW);
+  var c=$('vb-clr');c.disabled=!can(VIEW);c.classList.toggle('arm',!!VBC.arm);c.textContent=VBC.arm?'⚠ Confirmer ?':'🗑 Effacer'}
+$('vb-mute').onclick=function(){var r=vRow();if(!r)return;var v=!OFFG[r]||OFFQ[r];offTap(r,v);kmsg(rname(r)+(v?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'));offUI();vbackUI()};
+$('vb-clr').onclick=function(){var r=vRow();if(!r)return;clearTimeout(VBC.t);
+  if(!VBC.arm){VBC.arm=1;vbackUI();VBC.t=setTimeout(function(){VBC.arm=0;vbackUI()},3000);return}
+  VBC.arm=0;$({b:'b-clr',y:'y-clr',g:'g-clr',d:'d-clr'}[VIEW]).click();kmsg(rname(r)+(VIEW==='d'?' : variation '+D.v+' effacée':' : effacé'));vbackUI()};
 function hubUI(){
-  if(!NAV)return;
+  if(!NAV)return;try{vbackUI()}catch(e){}
   ['d','b','y','g','l','c','m'].forEach(function(k){var t=$('it-'+k);
     t.hidden=MODE==='disc'&&typeof DORD!=='undefined'&&DORD.indexOf(k)>=DISC.n&&!(k==='m'&&NET.role!=='solo');
     var r=k==='d'||k==='g'?k:(k==='b'||k==='y')?k+VC[k]:'';t.classList.toggle('off',!!(r&&OFFG[r]&&(k==='d'||k==='g'||ROOKIE)));
     if(k==='b'||k==='y'){var n=0;for(var v=0;v<3;v++)if(vHasNotes(k,v))n++;$('it-'+k+'-s').textContent=ROOKIE?(vHasNotes(k,0)?'Des notes écrites':'Vide'):'3 voix · '+n+' avec des notes'}});
   if(VIEW!=='home'&&(VIEW==='b'||VIEW==='y'))$('vback-t').textContent=ROOKIE?VNAME[VIEW]:rname(VIEW+VC[VIEW]);
 }
-if(NAV){document.body.classList.add('nav');document.body.setAttribute('data-view','home');try{if(/^#[A-Z2-9]{5}$/.test(location.hash))VIEW='m'}catch(e){}}
+/* réglages essentiels visibles, le reste derrière « Plus de réglages » */
+(function(){var ESS={knobs:['cutoff','res','env','decay','accent','drive','vol'],yknobs:['ycut','yres','yenv','ydec','ydly','yrev','yvol'],gknobs:['gcut','gdrv','gdec','glen','ggl','gvib','gvol']};
+  Object.keys(ESS).forEach(function(bx){var box=$(bx),n=0;KN.forEach(function(k){if((k.box||'knobs')!==bx||ESS[bx].indexOf(k.id)>=0||!knobEls[k.id])return;knobEls[k.id].kn.parentNode.classList.add('kadv');n++});
+    if(!n)return;var b=document.createElement('button');b.type='button';b.className='ktog';b.setAttribute('aria-expanded','false');var lab='＋ Plus de réglages ('+n+')';b.textContent=lab;
+    box.parentNode.insertBefore(b,box.nextSibling);b.onclick=function(){var on=!box.classList.contains('kopen');box.classList.toggle('kopen',on);b.setAttribute('aria-expanded',on?'true':'false');b.textContent=on?'－ Moins de réglages':lab}})})();
+document.querySelectorAll('.zone').forEach(function(z){var g=z.querySelector('.gen');if(!g)return; /* bouton « Générateur » discret, en bas */
+  var b=document.createElement('button');b.type='button';b.className='gtog';b.setAttribute('aria-expanded','false');b.textContent='✨ Générateur';g.parentNode.insertBefore(b,g);
+  b.onclick=function(){var on=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',on?'true':'false');b.textContent=on?'✨ Générateur ▴':'✨ Générateur';
+    z.querySelectorAll('.gen,.sing').forEach(function(x){x.classList.toggle('gopen',on)});if(on)try{g.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){}}});
+if(NAV){document.body.appendChild($('toast'));ytoast=function(m){toast(m)};gtoast=function(m){toast(m)}; /* messages visibles même générateur replié */
+  var kmsg0=kmsg;kmsg=function(m){kmsg0(m);if(m&&VIEW!=='home')toast(m)};
+  document.body.classList.add('nav');document.body.setAttribute('data-view','home');try{if(/^#[A-Z2-9]{5}$/.test(location.hash))VIEW='m'}catch(e){}}
 /* ----- TOUT EFFACER : vide les séquences de toutes les pistes (basses 1-3, synthés 1-3, guitare, rythmes A-D), en 16 pas.
    Les sons, presets, pads et boucles du looper sont gardés. Premier appui : confirmation ; ensuite « Annuler » pendant 10 s. ----- */
 var CLRA={arm:0,undo:null,t:0};
