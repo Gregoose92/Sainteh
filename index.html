@@ -421,9 +421,15 @@ html.fsl,html.fsl body{overflow:hidden}
 .itile .im{position:absolute;left:0;bottom:0;height:4px;width:100%;background:var(--tc);transform-origin:left center;transform:scaleX(0)}
 .itile.off{opacity:.55}.itile.off b::after{content:" · mute";font-family:var(--f-body);font-size:11px;letter-spacing:.05em}
 .itile[hidden]{display:none}
-.vback{align-items:center;gap:12px;flex-wrap:wrap}
+.vback{align-items:center;gap:10px;flex-wrap:nowrap;position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px));z-index:9;margin:-10px -18px -6px;padding:8px 18px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:0 4px 10px -8px rgba(0,0,0,.4)}
+.vback span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* dans une page d'instrument, le titre de la zone se colle sous la barre Retour */
+.nav:not([data-view="home"]) .zone>h2{top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + var(--vback-h,56px))}
+.nav:not([data-view="home"]) .zone.cue>.cuebar{top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + var(--vback-h,56px) + 40px)}
+@media (max-width:700px){.vback{margin:-6px -10px -4px;padding:7px 10px;gap:8px}.vback .btn{font-size:14px;padding:8px 12px}.vback .vtools .btn{font-size:12px;padding:8px 10px}.vback .vtools{gap:6px}}
+@media (max-width:420px){.vback span{display:none}}
 .vback .btn{font-size:15px;padding:10px 16px}
-.vback .vtools{margin-left:auto;display:flex;gap:8px}
+.vback .vtools{margin-left:auto;display:flex;gap:8px;flex:0 0 auto}
 .vback .vtools .btn{font-size:13px;padding:8px 12px}
 .vback .vtools[hidden]{display:none}
 #vb-mute[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
@@ -3347,6 +3353,8 @@ window.addEventListener('resize',function(){if(CFS)cfsLayout()});
 var tbar=$('tbar');
 function tbarH(){document.documentElement.style.setProperty('--tbar-h',tbar.offsetHeight+'px')}
 tbarH();window.addEventListener('resize',tbarH);
+function vbackH(){var v=$('vback');if(v&&v.offsetHeight)document.documentElement.style.setProperty('--vback-h',v.offsetHeight+'px')}
+try{new ResizeObserver(vbackH).observe($('vback'))}catch(e){}
 try{new ResizeObserver(tbarH).observe(tbar)}catch(e){}
 Object.keys(ZV).forEach(function(id){$('zv-'+ZV[id]).addEventListener('input',function(){setKnob(id,this.value/100)})});
 function rew(){cur=0;bar=0;if(!playing){playStep=playB=playY=playG=-1;refresh();renderDrums();renderY();renderG()}}
@@ -3375,7 +3383,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=77; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=78; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
