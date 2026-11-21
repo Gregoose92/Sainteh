@@ -1172,6 +1172,14 @@ html.fsl,html.fsl body{overflow:hidden}
         <button class="btn" id="kp-hard">Hard techno</button>
         <button class="btn" id="kp-acid">Acidcore</button>
       </div>
+      <label class="lbl" for="k-style">Autres kicks</label>
+      <select class="sel" id="k-style">
+        <option value="">Réglage perso</option>
+        <optgroup label="Techno et house"><option value="classic">Classique (909)</option><option value="hard">Hard techno</option><option value="acid">Acidcore</option><option value="dark">Techno sombre (sub)</option><option value="minimal">Minimal (sec)</option><option value="deep">Deep house (rond)</option></optgroup>
+        <optgroup label="Hardcore"><option value="gabber">Gabber (distordu)</option></optgroup>
+        <optgroup label="Bass music"><option value="k808">808 long</option><option value="trap">Trap (sub 808 saturé)</option><option value="dnb">Drum and bass (sec et claquant)</option><option value="dubstep">Dubstep (gros)</option><option value="zap">Electro (808 qui « zappe »)</option></optgroup>
+        <optgroup label="Acoustique"><option value="rock">Rock (grosse caisse)</option></optgroup>
+      </select>
     </div>
     <div class="knobs" id="kknobs"></div>
     <div class="screen"><canvas id="dgrid" aria-label="Vue d'ensemble des 8 pistes"></canvas></div>
@@ -1292,6 +1300,9 @@ var KN=[
  {id:'kdrive',label:'Disto kick',def:.1,box:'kknobs',fmt:pct},
  {id:'kclick',label:'Click',def:.2,box:'kknobs',fmt:pct},
  {id:'kduck',label:'Sidechain',def:.3,box:'kknobs',fmt:pct},
+ {id:'ktone',label:'Tonalité kick',def:.77,box:'kknobs',fmt:function(v){return Math.round(kToneHz(v))+' Hz'}},
+ {id:'kdrop',label:'Chute',def:.3,box:'kknobs',fmt:function(v){return Math.round(kDropS(v)*1000)+' ms'}},
+ {id:'ksub',label:'Sub 808',def:0,box:'kknobs',fmt:pct},
  {id:'yoct',label:'Octave',def:.5,box:'yknobs',fmt:function(v){var o=Math.round((v-.5)*4);return (o>0?'+':'')+o+' oct'}},
  {id:'ydet',label:'Détune',def:.35,box:'yknobs',fmt:function(v){return Math.round(v*50)+' ct'}},
  {id:'ycut',label:'Cutoff',def:.5,box:'yknobs',fmt:function(v){return Math.round(ycutHz(v))+' Hz'}},
@@ -1685,7 +1696,7 @@ function aY(t){
 function apply0(){
   var t=ctx.currentTime;
   lg.forEach(function(x,k){x.gain.setTargetAtTime(L.slots[k].vol,t,.02)});lbus.gain.setTargetAtTime(soloOut('l')||discOut('l')?0:P.lmast*1.6,t,.02);cbus.gain.setTargetAtTime(soloOut('c')||discOut('c')?0:P.cvol*1.1,t,.02);csd.gain.setTargetAtTime(P.cdly*.6,t,.02);csr.gain.setTargetAtTime(P.crev*.7,t,.02);lsd.gain.setTargetAtTime(P.ldly*.6,t,.02);lsr.gain.setTargetAtTime(P.lrv*.7,t,.02);
-  plvl(drumBus.gain,'d',P.dvol,t);plvl(kickBus.gain,'d',P.dvol*1.5,t);if(lastK!==P.kdrive){lastK=P.kdrive;kshaper.curve=curve(1+P.kdrive*28)}dsend.gain.setTargetAtTime(P.dly*.6,t,.02);rsend.gain.setTargetAtTime(P.rev*.7,t,.02);
+  plvl(drumBus.gain,'d',P.dvol,t);plvl(kickBus.gain,'d',P.dvol*1.5,t);if(lastK!==P.kdrive){lastK=P.kdrive;kshaper.curve=curve(1+P.kdrive*28)}klp.frequency.setTargetAtTime(kToneHz(P.ktone),t,.02);dsend.gain.setTargetAtTime(P.dly*.6,t,.02);rsend.gain.setTargetAtTime(P.rev*.7,t,.02);
   dly.delayTime.setTargetAtTime(Math.min(1.9,3*60/bpmOf(P.tempo)/4),t,.05);
   if(W){aB(t);aY(t);return} /* moteur du cue : la seule voix en préparation */
   aGt(t);
@@ -1771,7 +1782,7 @@ KN.forEach(function(k){
     if(e.key==='ArrowUp'||e.key==='ArrowRight'){setKnob(k.id,P[k.id]+d);e.preventDefault()}
     else if(e.key==='ArrowDown'||e.key==='ArrowLeft'){setKnob(k.id,P[k.id]-d);e.preventDefault()}});
 });
-function setKnob(id,v){if(!can(PG[id]))return;P[id]=Math.max(0,Math.min(1,v));if(/^k(punch|drive|click|duck)$/.test(id)&&D.kick){D.kick='';renderDrums()}if(B.preset&&BKEYS.indexOf(id)>=0){B.preset='';renderB()}if(id.charAt(0)==='y'&&id!=='yvol'&&Y.preset){Y.preset='';renderY()}if(id==='lvol'||id==='lstart'||id==='lrate'){L.slots[L.sel][id.slice(1)]=P[id];if(id==='lstart')drawLoop()}if(id==='dtune')D.tu[D.sel]=P[id];if(id==='ddec')D.de[D.sel]=P[id];drawKnob(id);applyParams();save()}
+function setKnob(id,v){if(!can(PG[id]))return;P[id]=Math.max(0,Math.min(1,v));if(/^k(punch|drive|click|duck|tone|drop|sub)$/.test(id)&&D.kick){D.kick='';renderDrums()}if(B.preset&&BKEYS.indexOf(id)>=0){B.preset='';renderB()}if(id.charAt(0)==='y'&&id!=='yvol'&&Y.preset){Y.preset='';renderY()}if(id==='lvol'||id==='lstart'||id==='lrate'){L.slots[L.sel][id.slice(1)]=P[id];if(id==='lstart')drawLoop()}if(id==='dtune')D.tu[D.sel]=P[id];if(id==='ddec')D.de[D.sel]=P[id];drawKnob(id);applyParams();save()}
 var ZV={vol:'b',yvol:'y',gvol:'g',lmast:'l',dvol:'d',cvol:'c'};
 function drawKnob(id){if(ZV[id])$('zv-'+ZV[id]).value=Math.round(P[id]*100);var o=knobEls[id],v=P[id];o.kn.style.setProperty('--a',(-135+v*270)+'deg');
   var txt=o.cfg.fmt(v);o.v.textContent=txt;o.kn.setAttribute('aria-valuenow',Math.round(v*100));o.kn.setAttribute('aria-valuetext',txt);
@@ -2133,7 +2144,9 @@ function hit(k,t,vel){
     case 'bd': /* kick : sinus à forte chute de hauteur → saturation → passe-bas, hors delay/reverb */
       var pu=P.kpunch,fb=50*tu,kd=.4*de;
       if(kLast){if(kLast.gain.cancelAndHoldAtTime)kLast.gain.cancelAndHoldAtTime(t);else kLast.gain.cancelScheduledValues(t);kLast.gain.setTargetAtTime(0,t,.003)}
-      g=ctx.createGain();g.connect(kickIn);nodes.push(g);E(g,lv,kd);O('sine',fb*(1+pu*pu*14),fb,.035+.06*pu,kd).connect(g);kLast=g;
+      kd*=1+P.ksub*3; /* Sub 808 : le kick tient plus longtemps */
+      g=ctx.createGain();g.connect(kickIn);nodes.push(g);E(g,lv,kd);O('sine',fb*(1+pu*pu*14),fb,kDropS(P.kdrop)+.03*pu,kd).connect(g);kLast=g;
+      if(P.ksub>0){var gs=ctx.createGain();gs.connect(g);nodes.push(gs);gs.gain.value=P.ksub*.55;O('triangle',fb*1.02,fb*.98,kd,kd).connect(gs)}
       if(P.kclick>0){g2=ctx.createGain();g2.connect(kickOut);nodes.push(g2);E(g2,lv*P.kclick*.5,.012);f=F('highpass',2500);N(.012).connect(f);f.connect(g2)}
       if(P.kduck>0&&(W||!OFFG.d)){duck.gain.cancelScheduledValues(t);duck.gain.setValueAtTime(1-P.kduck*.9,t);duck.gain.setTargetAtTime(1,t+.02,.07)}
       break;
@@ -2217,7 +2230,7 @@ function renderDrums(){
   'ABCD'.split('').forEach(function(v){$('v-'+v.toLowerCase()).setAttribute('aria-pressed',D.v===v)});
   $('dl-16').setAttribute('aria-pressed',!D.chain);$('dl-32').setAttribute('aria-pressed',D.chain===2);$('dl-64').setAttribute('aria-pressed',D.chain===4);$('v-copy').textContent='Copier '+D.v+' → '+dNext(D.v);
   $('d-auto').value=D.auto;
-  ['classic','hard','acid'].forEach(function(n){$('kp-'+n).setAttribute('aria-pressed',D.kick===n)});
+  ['classic','hard','acid'].forEach(function(n){$('kp-'+n).setAttribute('aria-pressed',D.kick===n)});$('k-style').value=KP[D.kick]?D.kick:'';
   drawDGrid();
 }
 function drumStepUI(){
@@ -2244,11 +2257,19 @@ function drawDGrid(){
   g.globalAlpha=1;
 }
 dg.addEventListener('click',function(e){var r=dg.getBoundingClientRect();selInst(Math.max(0,Math.min(7,Math.floor((e.clientY-r.top)/(r.height/8)))))});
-var KP={classic:{kpunch:.3,kdrive:.1,kclick:.2,kduck:.3,tu:.5,de:.5},hard:{kpunch:.5,kdrive:.5,kclick:.4,kduck:.45,tu:.45,de:.6},acid:{kpunch:.8,kdrive:.9,kclick:.6,kduck:.6,tu:.5,de:.85}};
-function kickPreset(n){var p=KP[n];D.kick=n;['kpunch','kdrive','kclick','kduck'].forEach(function(k){P[k]=p[k];drawKnob(k)});
+/* styles de kick : Punch, Disto, Click, Sidechain, accord (tu) et longueur (de) de la piste BD, Tonalité, Chute, Sub 808 */
+function kp(a){return {kpunch:a[0],kdrive:a[1],kclick:a[2],kduck:a[3],tu:a[4],de:a[5],ktone:a[6],kdrop:a[7],ksub:a[8]}}
+var KP={classic:kp([.3,.1,.2,.3,.5,.5,.77,.3,0]),hard:kp([.5,.5,.4,.45,.45,.6,.7,.25,0]),acid:kp([.8,.9,.6,.6,.5,.85,.8,.35,0]),
+  dark:kp([.35,.4,.2,.5,.42,.75,.5,.3,.4]),minimal:kp([.35,.05,.35,.2,.55,.3,.75,.15,0]),deep:kp([.25,0,.05,.35,.45,.55,.55,.35,.15]),
+  gabber:kp([.9,.85,.7,.5,.55,.35,.85,.4,0]),k808:kp([.15,.05,.05,.3,.45,.9,.6,.55,.7]),trap:kp([.2,.3,.1,.2,.4,1,.55,.6,1]),
+  dnb:kp([.55,.25,.5,.35,.55,.4,.85,.2,.1]),dubstep:kp([.6,.45,.45,.55,.45,.6,.7,.3,.35]),zap:kp([1,.2,0,.3,.5,.5,.7,.9,.2]),rock:kp([.45,.1,.6,0,.6,.35,.9,.1,0])};
+function kToneHz(v){return 400*Math.pow(30,v)}
+function kDropS(v){return .015+.2*Math.pow(v,1.5)}
+function kickPreset(n){var p=KP[n];if(!p)return;D.kick=n;['kpunch','kdrive','kclick','kduck','ktone','kdrop','ksub'].forEach(function(k){P[k]=p[k];drawKnob(k)});
   D.tu[0]=p.tu;D.de[0]=p.de;if(D.sel===0){P.dtune=p.tu;P.ddec=p.de;drawKnob('dtune');drawKnob('ddec')}
   applyParams();renderDrums();save();tap(0,1)}
 ['classic','hard','acid'].forEach(function(n){$('kp-'+n).onclick=function(){kickPreset(n)}});
+$('k-style').onchange=function(){if(this.value)kickPreset(this.value)};
 Object.keys(INS).forEach(function(i){var o=document.createElement('option');o.value=i;o.textContent=INS[i][0]+' · '+INS[i][1];$('d-inst').appendChild(o)});
 $('d-inst').onchange=function(){D.inst[D.sel]=this.value;renderDrums();save();tap(D.sel,1)};
 Object.keys(KITS).forEach(function(n){$('kit-'+n).onclick=function(){D.inst=KITS[n].slice();renderDrums();save();toast('Kit '+this.textContent+' chargé.')}});
@@ -3465,7 +3486,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=85; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=86; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
