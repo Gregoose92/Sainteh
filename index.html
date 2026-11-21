@@ -740,7 +740,7 @@ html.fsl,html.fsl body{overflow:hidden}
     <h2>GÉNÉRATEUR DE BASSE</h2>
     <div class="gengrid">
       <div class="field"><label class="lbl" for="g-style">Style</label>
-        <select id="g-style"><option value="acid">Acid</option><option value="min">Minimale</option><option value="micro">Micro</option></select></div>
+        <select id="g-style"><optgroup label="Acid et minimal"><option value="acid">Acid</option><option value="min">Minimale</option><option value="micro">Micro</option></optgroup><optgroup label="Techno et house"><option value="offbeat">Techno à contretemps</option><option value="rolling">Rolling (trance, psy)</option><option value="house">House (octaves)</option><option value="disco">Disco (octaves en croches)</option></optgroup><optgroup label="Bass music"><option value="dnb">Drum and bass</option><option value="dubstep">Dubstep (halftime)</option><option value="hiphop">Hip-hop / trap (808)</option></optgroup><optgroup label="Groove"><option value="funk">Funk</option><option value="electro">Electro</option><option value="dub">Dub / reggae</option><option value="rock">Rock / punk (croches)</option></optgroup></select></div>
       <div class="field"><label class="lbl" for="g-root">Tonique</label>
         <select id="g-root"></select></div>
       <div class="field"><label class="lbl" for="g-scale">Gamme</label>
@@ -1885,15 +1885,44 @@ function bMicro(g){
   if(a.filter(function(x){return x.g}).length<3){a[0]=S(1,g.root,0,false,false);a[3]=S(1,g.root,1,false,false);a[10]=S(1,g.root,0,true,false)}
   return a;
 }
+/* Styles écrits « à la main » : une mesure-type par style, avec des variantes au hasard (densité, octaves, accents),
+   des notes tenues (liaisons) et des slides placés là où le style les veut. */
+var BSTY={acid:'acid',min:'minimal',micro:'micro',offbeat:'techno à contretemps',rolling:'rolling',house:'house',disco:'disco',dnb:'drum and bass',dubstep:'dubstep',hiphop:'hip-hop',funk:'funk',electro:'electro',dub:'dub',rock:'rock'};
+function bTpl(g){
+  var a=[],r=Math.random,d=g.dens/100,sc=SCALES[g.scale]||SCALES.min,st=g.style,i;
+  for(i=0;i<16;i++)a.push(S(0,g.root,0,false,false));
+  function dg(x){return x==='3'?sc[Math.min(2,sc.length-1)]:x==='4'?sc[Math.min(3,sc.length-1)]:x==='5'?7:x==='7'?sc[sc.length-1]:x==='2'?sc[Math.min(1,sc.length-1)]:0}
+  function nt(p,x,o,ac,tie,sl){if(p<0||p>15)return;a[p]=S(1,(g.root+dg(x))%12,o||0,!!ac,!!sl);for(var k=1;k<=(tie||0)&&p+k<16;k++)a[p+k]=S(2,a[p].n,a[p].o,false,false)}
+  function opt(pr){return r()<pr*(.45+d*.75)}
+  function up(pr){return r()*100<g.oct*pr?1:0}
+  function pick(l){return l[Math.floor(r()*l.length)]}
+  if(st==='offbeat'){[2,6,10,14].forEach(function(p){nt(p,'r',up(.5),p===2)});if(opt(.5))nt(pick([3,11]),'r',0);if(opt(.35))nt(15,pick(['5','r']),1)}
+  else if(st==='rolling'){for(i=0;i<16;i++)if(i%4)nt(i,r()<.8?'r':pick(['5','2']),up(.4),i%4===1&&r()*100<g.acc);if(opt(.35))nt(15,'5',1)}
+  else if(st==='house'){[2,6,10,14].forEach(function(p,j){nt(p,'r',j%2?1:0,j===0)});if(opt(.6))nt(3,'r',1);if(opt(.5))nt(11,'5',0);if(opt(.3))nt(15,'7',0)}
+  else if(st==='disco'){for(i=0;i<16;i+=2)nt(i,i===12&&r()<.5?'4':i===14&&r()<.5?'5':'r',(i/2)%2?1:0,i%8===0);if(opt(.4))nt(7,'r',1)}
+  else if(st==='dnb'){nt(0,'r',-1,true,4);if(opt(.6))nt(6,'r',-1,false,1);var x=pick(['5','3','7','4']);nt(9,'r',-1,false,0,true);nt(10,x,-1,false,opt(.6)?5:2)}
+  else if(st==='dubstep'){nt(0,'r',-1,true,5);nt(8,pick(['r','2','3']),-1,false,opt(.5)?3:1);if(opt(.6)){nt(12,'r',0,true);nt(14,pick(['5','7','r']),0,false,1)}}
+  else if(st==='hiphop'){nt(0,'r',-1,true,4);if(opt(.6))nt(6,'r',-1,false,0,true);nt(7,pick(['5','3','7']),-1,false,1);nt(10,'r',-1,false,opt(.5)?3:1);if(opt(.4))nt(14,pick(['r','5']),0,false,1)}
+  else if(st==='funk'){nt(0,'r',0,true);nt(3,'r',1,true);if(opt(.7))nt(6,'r',0);if(opt(.6))nt(7,'5',0);nt(10,'r',0);if(opt(.6))nt(11,'r',1,true);if(opt(.6))nt(13,pick(['7','4']),0);nt(14,'5',0,false,0,true);nt(15,'r',1)}
+  else if(st==='electro'){nt(0,'r',0,true);nt(3,'r',up(.6));nt(6,'r',0);if(opt(.6))nt(8,'r',1,true);nt(10,pick(['r','3']),0);if(opt(.6))nt(12,'5',0);if(opt(.5))nt(14,'r',1)}
+  else if(st==='dub'){nt(0,'r',-1,true,2);nt(6,'5',-1);nt(8,'r',-1,false,1);if(opt(.7))nt(11,'3',-1,false,0,true);nt(12,pick(['4','5']),-1,false,1);if(opt(.4))nt(15,'2',-1)}
+  else{for(i=0;i<16;i+=2)nt(i,i>=12&&r()<.4?pick(['4','5']):'r',up(.2),i%4===0);if(opt(.4))for(i=1;i<16;i+=4)nt(i,'r',0)} /* rock / punk */
+  a.forEach(function(x){if(x.g===1&&!x.a&&r()*100<g.acc*.3)x.a=true});
+  return a;
+}
 $('b-gen').onclick=function(){var g=genState(),i;
-  if(g.style==='min'||g.style==='micro'){
+  if(BSTY[g.style]&&g.style!=='acid'&&g.style!=='min'&&g.style!=='micro'){
+    var t1=bTpl(g),t2=JSON.parse(JSON.stringify(t1)),tv=bTpl(g);for(i=12;i<16;i++)t2[i]=tv[i]; /* la 2e mesure répond sur sa fin */
+    if(t2[11].g===2&&t2[12].g!==2)t2[11]=S(0,g.root,0,false,false);
+    var ta=t1.concat(t2);for(i=0;i<64;i++)pat[i]=JSON.parse(JSON.stringify(ta[i%32]));
+  }else if(g.style==='min'||g.style==='micro'){
     var b1=g.style==='min'?bMin(g):bMicro(g),b2=JSON.parse(JSON.stringify(b1));
     if(g.style==='micro'){var v=g.style==='micro'?bMicro(g):null;for(i=12;i<16;i++)b2[i]=v[i]} /* réponse : la fin de la 2e mesure change */
     else if(Math.random()<.5){var q=[3,7,11,15][Math.floor(Math.random()*4)];b2[q]=b2[q].g?S(0,g.root,0,false,false):S(1,g.root,0,false,false)}
     var all=b1.concat(b2);for(i=0;i<64;i++)pat[i]=JSON.parse(JSON.stringify(all[i%32]));
     fixLinks({sld:g.sld*(g.style==='min'?.3:.45)});
   }else{for(i=0;i<BL;i++)pat[i]=genStep(g,i%16===0);fixLinks(g)}
-  changed();toast('Nouveau pattern '+({acid:'acid',min:'minimal',micro:'micro'}[g.style]||'')+' en '+NOTE[g.root]+'.')};
+  changed();toast('Nouveau pattern '+(BSTY[g.style]||'')+' en '+NOTE[g.root]+'.')};
 $('b-mut').onclick=function(){var g=genState(),ids=[];while(ids.length<3){var x=Math.floor(Math.random()*BL);if(ids.indexOf(x)<0)ids.push(x)}
   ids.forEach(function(i){pat[i]=genStep(g,false)});fixLinks(g,ids);changed();toast('Pas modifiés : '+ids.map(function(i){return i+1}).sort(function(a,b){return a-b}).join(', ')+'.')};
 $('b-l').onclick=function(){var a=pat.splice(0,BL);a.push(a.shift());pat=a.concat(pat);changed()};
@@ -3416,7 +3445,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=83; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=84; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
