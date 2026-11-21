@@ -425,6 +425,12 @@ html.fsl,html.fsl body{overflow:hidden}
 .itile{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:6px;min-height:84px;padding:12px 14px;border-radius:10px;border:1px solid color-mix(in srgb,var(--tc) 55%,var(--line));background:color-mix(in srgb,var(--tc) 12%,var(--panel));color:var(--ink);font:inherit;text-align:left;cursor:pointer;touch-action:manipulation;overflow:hidden}
 .itile b{font-family:var(--f-display);font-weight:400;font-size:15px;letter-spacing:.08em;color:var(--tc)}
 .itile small{font-size:12px;color:var(--ink-soft)}
+.itile .ipads{display:flex;flex-wrap:wrap;gap:4px;min-height:18px}
+.ipad{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;border:1px solid color-mix(in srgb,var(--tc) 55%,transparent);font:600 11px/16px var(--f-mono);color:var(--ink-soft);white-space:nowrap}
+.ipad i{font-style:normal;opacity:.7;font-weight:400}
+.ipad.on{background:var(--tc);border-color:var(--tc);color:var(--page)}.ipad.on i{opacity:.75}
+.ipad.ghost{border-style:dashed}
+.ipad.pend{animation:ipend .6s steps(2) infinite}@keyframes ipend{50%{opacity:.35}}
 .itile .im{position:absolute;left:0;bottom:0;height:4px;width:100%;background:var(--tc);transform-origin:left center;transform:scaleX(0)}
 .itile.off{opacity:.55}.itile.off b::after{content:" · mute";font-family:var(--f-body);font-size:11px;letter-spacing:.05em}
 .itile[hidden]{display:none}
@@ -634,10 +640,10 @@ html.fsl,html.fsl body{overflow:hidden}
   </section>
 
   <div class="ihub" id="ihub" role="group" aria-label="Instruments">
-    <button class="itile" id="it-d" type="button" style="--tc:var(--ink)"><b>RYTHMES</b><small id="it-d-s">Boîte à rythmes</small><i class="im" id="it-d-m"></i></button>
-    <button class="itile" id="it-b" type="button" style="--tc:var(--c-b)"><b>BASSLINE</b><small id="it-b-s">Basse 303</small><i class="im" id="it-b-m"></i></button>
-    <button class="itile" id="it-y" type="button" style="--tc:var(--c-y)"><b>SYNTHÉ</b><small id="it-y-s">Synthé lead</small><i class="im" id="it-y-m"></i></button>
-    <button class="itile" id="it-g" type="button" style="--tc:var(--c-g)"><b>GUITARE</b><small id="it-g-s">Guitare électrique</small><i class="im" id="it-g-m"></i></button>
+    <button class="itile" id="it-d" type="button" style="--tc:var(--ink)"><b>RYTHMES</b><span class="ipads" id="it-d-p" aria-label="Pads en lecture"></span><small id="it-d-s">Boîte à rythmes</small><i class="im" id="it-d-m"></i></button>
+    <button class="itile" id="it-b" type="button" style="--tc:var(--c-b)"><b>BASSLINE</b><span class="ipads" id="it-b-p" aria-label="Pads en lecture"></span><small id="it-b-s">Basse 303</small><i class="im" id="it-b-m"></i></button>
+    <button class="itile" id="it-y" type="button" style="--tc:var(--c-y)"><b>SYNTHÉ</b><span class="ipads" id="it-y-p" aria-label="Pads en lecture"></span><small id="it-y-s">Synthé lead</small><i class="im" id="it-y-m"></i></button>
+    <button class="itile" id="it-g" type="button" style="--tc:var(--c-g)"><b>GUITARE</b><span class="ipads" id="it-g-p" aria-label="Pads en lecture"></span><small id="it-g-s">Guitare électrique</small><i class="im" id="it-g-m"></i></button>
     <button class="itile" id="it-l" type="button" style="--tc:var(--c-l)"><b>LOOPER</b><small id="it-l-s">Looper voix</small><i class="im" id="it-l-m"></i></button>
     <button class="itile" id="it-c" type="button" style="--tc:var(--c-c)"><b>CONGAS</b><small id="it-c-s">Percussions</small><i class="im" id="it-c-m"></i></button>
     <button class="itile" id="it-m" type="button" style="--tc:var(--c-m)"><b>À PLUSIEURS</b><small id="it-m-s">Jouer en session</small></button>
@@ -3508,7 +3514,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=91; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=92; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4759,11 +4765,23 @@ $('vb-mute').onclick=function(){var r=vRow();if(!r)return;var v=!OFFG[r]||OFFQ[r
 $('vb-clr').onclick=function(){var r=vRow();if(!r)return;clearTimeout(VBC.t);
   if(!VBC.arm){VBC.arm=1;vbackUI();VBC.t=setTimeout(function(){VBC.arm=0;vbackUI()},3000);return}
   VBC.arm=0;$({b:'b-clr',y:'y-clr',g:'g-clr',d:'d-clr'}[VIEW]).click();kmsg(rname(r)+(VIEW==='d'?' : variation '+D.v+' effacée':' : effacé'));vbackUI()};
+/* sur chaque tuile : quel pad joue sur chaque ligne (P1…P8), ∅ = pad vide, « libre » = motif modifié qui n'est dans aucun pad */
+function ipadsUI(k){var box=$('it-'+k+'-p');if(!box)return;
+  var rows=k==='d'||k==='g'?[k]:ROOKIE?[k+'0']:[k+'0',k+'1',k+'2'],h='';
+  rows.forEach(function(r){var lab=rows.length>1?'<i>'+(k==='b'?'B':'S')+(+r.charAt(1)+1)+'</i>':'',cur='',idx=-1,has=false,i;
+    try{cur=padCur(r)}catch(e){}
+    for(i=0;i<PADN;i++){var d=PADS[r][i];if(!d)continue;has=true;if(idx<0){try{if(padSlotKey(r,d)===cur)idx=i}catch(e){}}}
+    var q=PADQ[r]>=0?PADQ[r]:-1,cls,txt;
+    if(OFFG[r]&&!OFFQ[r]){cls='ghost';txt='∅'}else if(idx>=0){cls='on';txt='P'+(idx+1)}else{cls='';txt=has?'libre':'—'}
+    if(q>=0&&q!==idx){cls+=' pend';txt+=' → P'+(q+1)}else if(typeof ghostPend==='function'&&ghostPend(r)){cls+=' pend';txt+=' → ∅'}
+    h+='<span class="ipad '+cls+'">'+lab+txt+'</span>'});
+  if(box._h!==h){box._h=h;box.innerHTML=h}}
 function hubUI(){
   if(!NAV)return;try{vbackUI()}catch(e){}
   ['d','b','y','g','l','c','m'].forEach(function(k){var t=$('it-'+k);
     t.hidden=MODE==='disc'&&typeof DORD!=='undefined'&&DORD.indexOf(k)>=DISC.n&&!(k==='m'&&NET.role!=='solo');
     var r=k==='d'||k==='g'?k:(k==='b'||k==='y')?k+VC[k]:'';t.classList.toggle('off',!!(r&&OFFG[r]&&(k==='d'||k==='g'||ROOKIE)));
+    try{ipadsUI(k)}catch(e){}
     if(k==='b'||k==='y'){var n=0;for(var v=0;v<3;v++)if(vHasNotes(k,v))n++;$('it-'+k+'-s').textContent=ROOKIE?(vHasNotes(k,0)?'Des notes écrites':'Vide'):'3 voix · '+n+' avec des notes'}});
   if(VIEW!=='home'&&(VIEW==='b'||VIEW==='y'))$('vback-t').textContent=ROOKIE?VNAME[VIEW]:rname(VIEW+VC[VIEW]);
 }
