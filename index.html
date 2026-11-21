@@ -1733,6 +1733,8 @@ function schedule(bi,i,t){
 }
 /* Écran verrouillé / appli en arrière-plan : les minuteries de la page ralentissent (1 s ou plus). On planifie alors
    2,5 s d'avance au lieu de 0,22 s, et une horloge dans un Worker (moins freinée) relance la planification. */
+/* journal des pas (heure sur la grille) où un kick est programmé : le loop ne démarre que sur l'un d'eux */
+var KLOG=[],kickMark=0;
 function aheadS(){return document.hidden?2.5:.22}
 var bgClock=null;
 try{bgClock=new Worker(URL.createObjectURL(new Blob(['var t=null;onmessage=function(e){clearInterval(t);if(e.data)t=setInterval(function(){postMessage(0)},200)}'],{type:'text/javascript'})));
@@ -1741,7 +1743,7 @@ function bgClockSet(){try{if(bgClock)bgClock.postMessage(playing?1:0)}catch(e){}
 function pump(){
   while(nextTime<ctx.currentTime+aheadS()){
     var d=60/bpmOf(P.tempo)/4,tt=nextTime+(cur%2?P.shuffle*d*.4:0);
-    try{step(cur,bar,tt,d)}catch(e){audioMsg('Erreur audio ignorée : '+e.message)}nextTime+=d;cur=(cur+1)%16;
+    kickMark=0;try{step(cur,bar,tt,d)}catch(e){audioMsg('Erreur audio ignorée : '+e.message)}if(kickMark){KLOG.push(nextTime);if(KLOG.length>256)KLOG.splice(0,KLOG.length-256)}nextTime+=d;cur=(cur+1)%16;
     if(cur===0){bar++;if(fillArmed){fillArmed=false;$('fill').setAttribute('aria-pressed',false)}netQueued();try{autoBar()}catch(e){}}
   }
 }
@@ -1764,7 +1766,7 @@ function vPlay(g,v,fn){if(ROOKIE&&v>0)return;if(v!==VC[g]&&!ENG[0][g+'v'][v]&&!v
 function cueStep(c,b,t){
   inCue(function(){if(CUE.b)schedule(sIdx(BL,b,c),c,t);if(CUE.d)drums(c,t);if(CUE.y)ysched(sIdx(Y.len,b,c),t)});
 }
-function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;masterBack();playing=true;vGates();queue=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
+function start(){if(NET.role==='guest'){netSend({t:'cmd',c:'play'});return}initAudio();if(!ctx)return;masterBack();playing=true;vGates();queue=[];KLOG=[];nextTime=ctx.currentTime+.06;tick();setPlayUI();netPlay()}
 var bgMuteT=0,bgMuted=false;
 function masterBack(){clearTimeout(bgMuteT);bgMuteT=0;if(bgMuted&&ctx&&mix){bgMuted=false;mix.gain.cancelScheduledValues(ctx.currentTime);mix.gain.setValueAtTime(.7,ctx.currentTime)}}
 function stop(){if(NET.role==='guest'){netSend({t:'cmd',c:'pause'});return}
@@ -2161,7 +2163,7 @@ function hit(k,t,vel){
   function E(x,pk,dc){pk=Math.max(pk,.0002);x.gain.setValueAtTime(pk,t);x.gain.exponentialRampToValueAtTime(.0001,t+dc)}
   var id=D.inst[k];
   switch(id){
-    case 'bd': /* kick : sinus à forte chute de hauteur → saturation → passe-bas, hors delay/reverb */
+    case 'bd': kickMark=1; /* kick : sinus à forte chute de hauteur → saturation → passe-bas, hors delay/reverb */
       var pu=P.kpunch,fb=50*tu,kd=.4*de;
       if(kLast){if(kLast.gain.cancelAndHoldAtTime)kLast.gain.cancelAndHoldAtTime(t);else kLast.gain.cancelScheduledValues(t);kLast.gain.setTargetAtTime(0,t,.003)}
       kd*=1+P.ksub*3; /* Sub 808 : le kick tient plus longtemps */
@@ -3506,7 +3508,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=90; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=91; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4287,9 +4289,11 @@ function rpOn(by,n){
   if(!playing||!ctx){kmsg('Le loop répète ce qui joue : lance la lecture d\'abord');return}
   if(!RP.ok){kmsg(RP.fail?'Loop impossible dans ce navigateur'+(RP.err?' ('+RP.err.slice(0,80)+')':''):'Loop en préparation, réessaie dans un instant');rpInit();return}
   var d=60/bpmOf(P.tempo)/4,br=d,now=ctx.currentTime,tB=nextTime-Math.ceil((nextTime-now)/d-1e-9)*d; /* début du pas en cours */
-  var nb=Math.min(n,Math.floor((tB-RP.t0)/br+1e-6));
-  if(nb<1){kmsg('Le loop a besoin d\'au moins un pas déjà joué');return}
-  var sr=ctx.sampleRate,a=Math.round((tB-nb*br)*sr),b=Math.round(tB*sr),id=++RP.id;
+  /* départ obligatoirement sur un kick : le plus récent dont les n pas sont déjà entièrement joués (et encore en mémoire) */
+  var nb=n,kS=-1,lim=Math.max(RP.t0,now-15);
+  for(var ki=KLOG.length-1;ki>=0;ki--){var kt=KLOG[ki];if(kt<lim)break;if(kt+nb*br<=tB+1e-4){kS=kt;break}}
+  if(kS<0){kmsg(KLOG.some(function(x){return x>=lim})?'Loop : attends que '+n+' pas soient joués après un kick':'Pas de kick : le loop se cale uniquement sur un kick');return}
+  var sr=ctx.sampleRate,a=Math.round(kS*sr),b=Math.round((kS+nb*br)*sr),id=++RP.id;
   RP.on=true;RP.n=n;RP.want=true;RP.by=by||null;padUI();
   RP.cb[id]=function(m){
     if(!RP.want||RP.id!==id)return;
@@ -4297,10 +4301,10 @@ function rpOn(by,n){
     var len=m.l.length,ab=ctx.createBuffer(2,len,sr),f=Math.min(96,len>>3),i;
     for(i=0;i<f;i++){var g=i/f;m.l[i]*=g;m.r[i]*=g;m.l[len-1-i]*=g;m.r[len-1-i]*=g} /* fondu de 2 ms aux raccords */
     try{ab.copyToChannel(m.l,0);ab.copyToChannel(m.r,1)}catch(e){ab.getChannelData(0).set(m.l);ab.getChannelData(1).set(m.r)}
-    var src=ctx.createBufferSource(),t0=ctx.currentTime+.015,L=len/sr,off=((t0-tB)%L+L)%L;
+    var src=ctx.createBufferSource(),L=len/sr,t0=tB+br*Math.ceil((ctx.currentTime+.015-tB)/br-1e-9),off=0; /* la boucle repart du kick, pile au pas suivant */
     src.buffer=ab;src.loop=true;src.connect(RP.loopG);src.start(t0,off);RP.src=src;RP.ls={t0:t0,off:off,L:L,br:br,nb:nb};rpTick();
     RP.liveG.gain.cancelScheduledValues(t0);RP.liveG.gain.setTargetAtTime(0,t0,.004);RP.loopG.gain.cancelScheduledValues(t0);RP.loopG.gain.setTargetAtTime(1,t0,.004);
-    kmsg('Loop : '+nb+' pas en boucle');
+    kmsg('Loop : '+nb+' pas en boucle, calés sur le kick');
   };
   RP.node.port.postMessage({id:id,a:a,b:b});
 }
