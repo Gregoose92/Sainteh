@@ -600,6 +600,9 @@ html.fsl,html.fsl body{overflow:hidden}
       <button class="btn" id="k-rec" aria-pressed="false">● Enregistrer</button>
       <button class="btn" id="k-del" aria-pressed="false">Effacer</button>
       <button class="btn" id="k-clr" type="button" title="Vider tous les pads (les boucles du looper restent)">🗑 Vider les pads</button>
+      <button class="btn" id="k-exp" type="button" title="Enregistrer ou envoyer un fichier avec tes pads et tes sons">⬇ Exporter</button>
+      <button class="btn" id="k-imp" type="button" title="Charger un fichier de pads et de sons">⬆ Importer</button>
+      <input type="file" id="k-file" accept=".json,application/json" hidden>
       <div class="seg" role="group" aria-label="Ce qu'un pad rappelle">
         <button class="btn" id="k-full">Séquence + son</button>
         <button class="btn" id="k-seq">Séquence seule</button>
@@ -1219,6 +1222,13 @@ html.fsl,html.fsl body{overflow:hidden}
   <p id="dco-t"></p>
   <div class="actions" id="dco-a"></div>
 </section>
+<div id="bankov" class="modeov" hidden role="dialog" aria-modal="true" aria-labelledby="bank-t">
+  <div class="modebox">
+    <h2 id="bank-t">Exporter</h2>
+    <p class="hint" id="bank-p"></p>
+    <div class="actions" id="bank-a" style="flex-wrap:wrap;gap:8px"></div>
+  </div>
+</div>
 <div id="vpick" class="modeov vpick" hidden role="dialog" aria-modal="true" aria-labelledby="vpick-t">
   <div class="modebox">
     <h2 id="vpick-t">Quelle bassline ?</h2>
@@ -1426,9 +1436,11 @@ function vHasNotes(g,v){var a=vPat(g,v);for(var i=0;i<a.n;i++)if(a.p[i]&&a.p[i].
 function rname(r){var c=r.charAt(0),v=+r.charAt(1);return r==='d'?'Rythmes':r==='g'?'Guitare':ROOKIE&&v===0?(c==='b'?'Basse':'Synthé'):(c==='b'?'Basse ':'Synthé ')+(v+1)}
 function rowOf(g,m){return g==='d'||g==='g'?g:g+vIdx(m&&m['v'+g],g)}
 var saveT=0;
+/* l'état complet du morceau (séquences, sons, presets, voix), tel qu'il est enregistré sur l'appareil */
+function songObj(){var o=null;inMaster(function(){var vs={b:[],y:[]};['b','y'].forEach(function(g){for(var v=0;v<3;v++)vs[g].push(v===VC[g]?null:VS[g][v])});
+  o={pat:pat,BL:BL,P:P,wave:wave,gen:genState(),ygen:ygenState(),dgen:dgenState(),D:D,Y:Y,L:L,B:B,vs:vs,vc:VC,G:GT,ggen:ggenState()}});return o}
 function saveNow(){clearTimeout(saveT);saveT=0;if(NET.role==='guest')return; /* on enregistre l'état du master, jamais un cue en préparation */
-  inMaster(function(){try{var vs={b:[],y:[]};['b','y'].forEach(function(g){for(var v=0;v<3;v++)vs[g].push(v===VC[g]?null:VS[g][v])});
-    localStorage.setItem('acidline16',JSON.stringify({pat:pat,BL:BL,P:P,wave:wave,gen:genState(),ygen:ygenState(),dgen:dgenState(),D:D,Y:Y,L:L,B:B,vs:vs,vc:VC,G:GT,ggen:ggenState()}))}catch(e){}})}
+  try{localStorage.setItem('acidline16',JSON.stringify(songObj()))}catch(e){}}
 var cueUT=0;
 function save(){netSync();padKick();if(cueAny()){clearTimeout(cueUT);cueUT=setTimeout(cueUI,80)}if(NET.role==='guest')return;clearTimeout(saveT);saveT=setTimeout(saveNow,400)}
 
@@ -3386,7 +3398,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=79; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=80; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4669,6 +4681,47 @@ $('k-clr').onclick=function(){
   if(!KCLR.arm){KCLR.arm=1;kclrUI();kmsg('Toucher encore pour vider tous les pads');KCLR.t=setTimeout(function(){KCLR.arm=0;kclrUI()},3500);return}
   KCLR.arm=0;KCLR.undo=JSON.parse(JSON.stringify(PADS));padArm='';kclrPut(null);kclrUI();kmsg('Pads vidés · « Annuler » pendant 10 s');
   KCLR.t=setTimeout(function(){KCLR.undo=null;kclrUI()},10000);
+};
+/* ----- EXPORTER / IMPORTER : un fichier .json avec tous les pads et le morceau en cours (sons, presets, séquences des
+   3 basses, 3 synthés, guitare, rythmes). À garder, ou à envoyer à un ami qui l'importe. Les boucles audio du looper n'y sont pas. ----- */
+function bankCount(p){var n=0;PADG.forEach(function(r){(p&&p[r]||[]).forEach(function(d){if(d)n++})});return n}
+function bankStamp(d){function z(x){return (x<10?'0':'')+x}return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'_'+z(d.getHours())+'h'+z(d.getMinutes())}
+function bankDlg(title,text,btns){$('bank-t').textContent=title;$('bank-p').textContent=text;var a=$('bank-a');a.textContent='';
+  btns.forEach(function(b){var e=mk('button','btn'+(b.primary?' primary':''),b.t);e.type='button';e.onclick=function(){$('bankov').hidden=true;if(b.f)b.f()};a.appendChild(e)});
+  $('bankov').hidden=false;try{a.querySelector('button').focus()}catch(e){}}
+$('bankov').addEventListener('click',function(e){if(e.target===this)this.hidden=true});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('bankov').hidden)$('bankov').hidden=true});
+$('k-exp').onclick=function(){
+  var bank={app:'le-saint-teh',kind:'banque',v:1,build:BUILD,date:new Date().toISOString(),pads:PADS,song:songObj()};
+  var name='le-saint-teh_'+bankStamp(new Date())+'.json',blob=new Blob([JSON.stringify(bank)],{type:'application/json'}),file=null;
+  try{file=new File([blob],name,{type:'application/json'})}catch(e){}
+  function dl(){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},4000);kmsg('Fichier enregistré : '+name)}
+  var canShare=false;try{canShare=!!(file&&navigator.canShare&&navigator.canShare({files:[file]}))}catch(e){}
+  var btns=[{t:'⬇ Enregistrer le fichier',primary:true,f:dl}];
+  if(canShare)btns.push({t:'📤 Envoyer…',f:function(){navigator.share({files:[file],title:'Le Saint Teh : pads et sons',text:'Mes pads et mes sons Le Saint Teh : ouvre l\'appli, Pads → Importer.'}).catch(function(e){if(!e||e.name!=='AbortError')dl()})}});
+  btns.push({t:'Annuler'});
+  bankDlg('Exporter mes pads et mes sons',bankCount(PADS)+' pad'+(bankCount(PADS)>1?'s':'')+' et le morceau en cours (sons, presets, séquences des basses, synthés, guitare et rythmes), dans un fichier « '+name+' ». Les boucles audio du looper ne sont pas incluses.',btns);
+};
+$('k-imp').onclick=function(){var f=$('k-file');f.value='';f.click()};
+$('k-file').onchange=function(){
+  var f=this.files&&this.files[0];if(!f)return;var rd=new FileReader();
+  rd.onload=function(){var j=null;try{j=JSON.parse(rd.result)}catch(e){}
+    if(!j||j.app!=='le-saint-teh'||!j.pads||typeof j.pads!=='object'){bankDlg('Fichier non reconnu','Ce fichier n\'est pas un export de Le Saint Teh.',[{t:'OK'}]);return}
+    if(j.pads.b&&!j.pads.b0)j.pads.b0=j.pads.b;if(j.pads.y&&!j.pads.y0)j.pads.y0=j.pads.y;
+    var src={};PADG.forEach(function(r){src[r]=[];for(var i=0;i<PADN;i++){var d=Array.isArray(j.pads[r])&&j.pads[r][i]?j.pads[r][i]:null;try{src[r].push(d?padClean(r,d):null)}catch(e){src[r].push(null)}}});
+    var n=bankCount(src),guest=NET.role==='guest',when='';try{when=new Date(j.date).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}catch(e){}
+    function pads(){if(guest&&!(hconn&&hconn.open)){kmsg('Pas de liaison avec le master');return}
+      clearTimeout(KCLR.t);KCLR.arm=0;KCLR.undo=JSON.parse(JSON.stringify(PADS));kclrPut(src);kclrUI();KCLR.t=setTimeout(function(){KCLR.undo=null;kclrUI()},10000);
+      kmsg(n+' pad'+(n>1?'s':'')+' importé'+(n>1?'s':'')+' · « Annuler » pendant 10 s')}
+    function all(){if(NET.role==='host'&&conns.some(function(c){return c._ok&&!c._gone})&&!confirm('Charger le morceau recharge l\'appli : la session en cours sera coupée. Continuer ?'))return;
+      try{localStorage.setItem('acidline16',JSON.stringify(j.song));var p={};PADG.forEach(function(r){p[r]=src[r]});localStorage.setItem('lst-pads',JSON.stringify(p))}catch(e){kmsg('Impossible d\'enregistrer sur cet appareil');return}
+      location.reload()}
+    var btns=[{t:'Remplacer mes pads',primary:true,f:pads}];
+    if(!guest&&j.song&&Array.isArray(j.song.pat))btns.push({t:'Pads + morceau (sons et séquences)',f:all});
+    btns.push({t:'Annuler'});
+    bankDlg('Importer « '+f.name+' »',(when?'Export du '+when+' · ':'')+n+' pad'+(n>1?'s':'')+(j.song?' et un morceau complet.':'.')+' « Remplacer mes pads » garde ce que tu joues ; « Pads + morceau » charge aussi les sons et les séquences du fichier (l\'appli se recharge).'+(guest?' En invité, seuls les pads sont importés, chez le master.':''),btns);
+  };
+  rd.readAsText(f);
 };
 /* ----- TOUT EFFACER : vide les séquences de toutes les pistes (basses 1-3, synthés 1-3, guitare, rythmes A-D), en 16 pas.
    Les sons, presets, pads et boucles du looper sont gardés. Premier appui : confirmation ; ensuite « Annuler » pendant 10 s. ----- */
