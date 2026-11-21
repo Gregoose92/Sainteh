@@ -439,13 +439,14 @@ html.fsl,html.fsl body{overflow:hidden}
 /* dans une page d'instrument, le titre de la zone se colle sous la barre Retour */
 .nav:not([data-view="home"]) .zone>h2{top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + var(--vback-h,56px))}
 .nav:not([data-view="home"]) .zone.cue>.cuebar{top:calc(env(safe-area-inset-top,0px) + var(--tbar-h,56px) + var(--vback-h,56px) + 40px)}
-@media (max-width:700px){.vback{margin:-6px -10px -4px;padding:7px 10px;gap:8px}.vback .btn{font-size:14px;padding:8px 12px}.vback .vtools .btn{font-size:12px;padding:8px 10px}.vback .vtools{gap:6px}}
-@media (max-width:420px){.vback span{display:none}}
+@media (max-width:700px){.vback{margin:-6px -10px -4px;padding:7px 10px;gap:8px;flex-wrap:wrap}#vback .vtools{flex:1 0 100%;justify-content:flex-end;flex-wrap:wrap}#vback .vtools{gap:5px}#vback .vtools .btn{padding:8px 7px;font-size:12px}.vback .btn{font-size:14px;padding:8px 12px}.vback .vtools .btn{font-size:12px;padding:8px 10px}.vback .vtools{gap:6px}}
+@media (max-width:420px){.vback span{display:block}} /* les outils passent sur leur propre ligne : le nom de la piste a la place à côté de Retour */
 .vback .btn{font-size:15px;padding:10px 16px}
 .vback .vtools{margin-left:auto;display:flex;gap:8px;flex:0 0 auto}
 .vback .vtools .btn{font-size:13px;padding:8px 12px}
 .vback .vtools[hidden]{display:none}
 #vb-mute[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+#vb-paste.undo{background:var(--ink);border-color:var(--ink);color:var(--panel)}
 #vb-clr.arm{background:var(--led);border-color:var(--led);color:#fff}
 /* générateur (et chant) repliés derrière un petit bouton en bas de chaque instrument */
 .gtog{display:none}
@@ -546,7 +547,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
   </div>
 
-  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span><div class="vtools" id="vtools"><button class="btn" id="vb-mute" type="button" aria-pressed="false">🔇 Mute</button><button class="btn" id="vb-clr" type="button">🗑 Effacer</button></div></div>
+  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span><div class="vtools" id="vtools"><button class="btn" id="vb-mute" type="button" aria-pressed="false">🔇 Mute</button><button class="btn" id="vb-clr" type="button">🗑 Effacer</button><button class="btn" id="vb-copy" type="button">📋 Copier</button><button class="btn" id="vb-paste" type="button" disabled>📥 Coller</button></div></div>
   <section class="zone zn">
     <h2><button class="zt" id="zt-m" aria-expanded="false"><span>À PLUSIEURS</span><i aria-hidden="true"></i></button><div class="lbl nstat" id="n-stat">Solo</div></h2>
     <div class="editor" id="n-solo">
@@ -3514,7 +3515,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=92; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=93; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4756,11 +4757,36 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('vpick')
 ['d','b','y','g','l','c','m'].forEach(function(k){$('it-'+k).onclick=function(){hubTap(k)}});
 $('vback-b').onclick=function(){viewOpen('home')};
 /* barre du haut d'un instrument : Mute et Effacer pour ce qu'on édite (la voix ouverte en Pro) */
-var VBC={arm:0,t:0};
+var VBC={arm:0,t:0},CLIP={c:null,undo:null,t:0,ut:0};
 function vRow(){return VIEW==='b'||VIEW==='y'?VIEW+VC[VIEW]:VIEW==='g'||VIEW==='d'?VIEW:''}
 function vbackUI(){var r=vRow(),t=$('vtools');t.hidden=!r;if(!r)return;var off=!!OFFG[r]&&!OFFQ[r],pend=!!OFFG[r]&&!!OFFQ[r];
   var m=$('vb-mute');m.setAttribute('aria-pressed',off||pend?'true':'false');m.textContent=pend?'⏳ Revient…':off?'🔊 Réactiver':'🔇 Mute';m.disabled=!can(VIEW);
-  var c=$('vb-clr');c.disabled=!can(VIEW);c.classList.toggle('arm',!!VBC.arm);c.textContent=VBC.arm?'⚠ Confirmer ?':'🗑 Effacer'}
+  var c=$('vb-clr');c.disabled=!can(VIEW);c.classList.toggle('arm',!!VBC.arm);c.textContent=VBC.arm?'⚠ Confirmer ?':'🗑 Effacer';
+  var k=$('vb-copy');k.disabled=false;k.textContent=CLIP.c&&CLIP.c.g===VIEW&&CLIP.c.r===r&&CLIP.t>Date.now()?'✔ Copié':'📋 Copier';
+  var p=$('vb-paste'),u=CLIP.undo&&CLIP.undo.r===r;p.classList.toggle('undo',!!u);
+  p.disabled=!can(VIEW)||!(u||(CLIP.c&&CLIP.c.g===VIEW));p.textContent=u?'↶ Annuler':CLIP.c&&CLIP.c.g===VIEW?'📥 Coller '+clipShort(CLIP.c):'📥 Coller';
+  p.title=CLIP.c?'Colle '+clipName(CLIP.c)+' ici (remplace ce qui est écrit)':'Copie d\'abord une piste';try{vbackH()}catch(e){}}
+/* copier / coller une piste : Basse 1 → Basse 2, Synthé 2 → Synthé 3, guitare, variation de batterie A → C…
+   on copie les notes ET le son (réglages, preset) ; « Annuler » rend la piste d'avant pendant 10 s */
+function clipKn(g){return KN.filter(function(k){return g==='b'?VK.b.indexOf(k.id)>=0:g==='y'?VK.y.indexOf(k.id)>=0:g==='g'?k.box==='gknobs':false}).map(function(k){return k.id})}
+function clipName(c){return c.g==='d'?'variation '+c.v:rname(c.r)}
+function clipShort(c){return c.g==='d'?'var. '+c.v:c.g==='g'?'':ROOKIE?'':(c.g==='b'?'B':'S')+(+c.r.charAt(1)+1)}
+function clipE(c){return c.g==='y'?'':'e'} /* accord : la basse copiée, le synthé copié */
+function clipGet(g){var c={g:g,r:vRow(),sec:{},kn:{}};
+  if(g==='d'){c.v=D.v;c.pat=JSON.parse(JSON.stringify(D.pat[D.v]));return c}
+  ({b:['pat','B'],y:['Y'],g:['G']})[g].forEach(function(n){c.sec[n]=JSON.parse(JSON.stringify(SEC[n].get()))});
+  clipKn(g).forEach(function(k){c.kn[k]=P[k]});return c}
+function clipPut(c){var g=c.g;
+  if(g==='d'){D.pat[D.v]=JSON.parse(JSON.stringify(c.pat));renderDrums()}
+  else{Object.keys(c.sec).forEach(function(n){SEC[n].set(JSON.parse(JSON.stringify(c.sec[n])));SEC[n].draw()});
+    Object.keys(c.kn).forEach(function(k){P[k]=c.kn[k];try{drawKnob(k)}catch(e){}});applyParams()}
+  try{vUI();padUI()}catch(e){}save()}
+$('vb-copy').onclick=function(){var r=vRow();if(!r)return;CLIP.c=clipGet(VIEW);CLIP.t=Date.now()+1500;setTimeout(vbackUI,1600);
+  kmsg(clipName(CLIP.c)+' copié'+clipE(CLIP.c)+' : ouvre une autre '+(VIEW==='b'?'basse':VIEW==='y'?'voix de synthé':VIEW==='d'?'variation (A B C D)':'piste')+' et touche Coller');vbackUI()};
+$('vb-paste').onclick=function(){var r=vRow();if(!r||!can(VIEW))return;clearTimeout(CLIP.ut);
+  if(CLIP.undo&&CLIP.undo.r===r){var u=CLIP.undo;CLIP.undo=null;clipPut(u);kmsg('Collage annulé');vbackUI();return}
+  if(!CLIP.c||CLIP.c.g!==VIEW)return;var before=clipGet(VIEW);clipPut(CLIP.c);
+  kmsg(clipName(CLIP.c)+' collé'+clipE(CLIP.c)+' sur '+clipName(before));CLIP.undo=before;CLIP.ut=setTimeout(function(){CLIP.undo=null;vbackUI()},10000);vbackUI()};
 $('vb-mute').onclick=function(){var r=vRow();if(!r)return;var v=!OFFG[r]||OFFQ[r];offTap(r,v);kmsg(rname(r)+(v?' : mute':playing?' : réactivé à la prochaine mesure':' : réactivé'));offUI();vbackUI()};
 $('vb-clr').onclick=function(){var r=vRow();if(!r)return;clearTimeout(VBC.t);
   if(!VBC.arm){VBC.arm=1;vbackUI();VBC.t=setTimeout(function(){VBC.arm=0;vbackUI()},3000);return}
