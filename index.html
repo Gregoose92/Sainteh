@@ -146,8 +146,8 @@ button.bpm:disabled{cursor:not-allowed;opacity:.6}
 .kautob[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon)}
 .kautob.beat{filter:brightness(1.3)}
 .kauto .seg .btn{min-width:34px;padding:4px 6px}
-.kloops{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:680px}
-.kloop{width:100%;min-height:64px;font-size:14px;line-height:1.2;padding:6px 4px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
+.kloops{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-width:680px}
+.kloop{width:100%;min-height:64px;font-size:13px;line-height:1.2;padding:6px 4px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
 .kloop[aria-pressed="true"]{background:var(--zc);border-color:var(--zc);color:var(--zon);box-shadow:0 0 0 3px color-mix(in srgb,var(--zc) 35%,transparent)}
 .kloop.wait{opacity:.6}
 .kloop.beat{filter:brightness(1.35)}
@@ -625,6 +625,8 @@ html.fsl,html.fsl body{overflow:hidden}
     </div>
     <div class="kloops" role="group" aria-label="Loop : maintenir pour répéter les derniers pas">
       <button class="btn kloop" id="k-loop1" data-n="1" type="button" aria-pressed="false">⟲ 1 PAS</button>
+      <button class="btn kloop" id="k-loop2" data-n="2" type="button" aria-pressed="false">⟲ 2 PAS</button>
+      <button class="btn kloop" id="k-loop3" data-n="3" type="button" aria-pressed="false">⟲ 3 PAS</button>
       <button class="btn kloop" id="k-loop5" data-n="5" type="button" aria-pressed="false">⟲ 5 PAS</button>
       <button class="btn kloop" id="k-loop10" data-n="10" type="button" aria-pressed="false">⟲ 10 PAS</button>
     </div>
@@ -3504,7 +3506,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=89; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=90; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4277,7 +4279,7 @@ function rpInit(){
   (url?ctx.audioWorklet.addModule(url):Promise.reject()).catch(function(){return ctx.audioWorklet.addModule('data:application/javascript;charset=utf-8,'+encodeURIComponent(code))})
     .then(go).catch(function(e){RP.fail=true;RP.loading=false;RP.err=String(e&&e.message||e);padKick()});
 }
-var RPN=[1,5,10];
+var RPN=[1,2,3,5,10];
 function rpOn(by,n){
   n=RPN.indexOf(n|0)>=0?n|0:5;
   if(RP.on){if(RP.n===n)return;rpOff(true)} /* un autre bouton pendant une boucle : on change de longueur */
@@ -4324,7 +4326,7 @@ function rpOff(quiet){
     if(RP.src){try{RP.src.stop(t+.05)}catch(e){}RP.src=null}}
   padUI();if(!quiet)kmsg('Loop relâché');
 }
-/* trois boutons à maintenir : le dernier appuyé décide de la longueur, la boucle s'arrête quand plus aucun n'est tenu */
+/* cinq boutons à maintenir : le dernier appuyé décide de la longueur, la boucle s'arrête quand plus aucun n'est tenu */
 (function(){
   var held={}; /* pointerId -> nombre de pas */
   function act(){var ks=Object.keys(held);return ks.length?held[ks[ks.length-1]]:0}
