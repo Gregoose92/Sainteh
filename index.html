@@ -17,6 +17,11 @@
 <style>
 :root{color-scheme:light;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 body{margin:0;font:14px system-ui,sans-serif;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+/* aucun texte ne se sélectionne ni n'ouvre de loupe ou de menu en jouant au doigt (iPhone) ; seuls les champs et le lien de session restent sélectionnables */
+html,body,body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body{touch-action:manipulation}
+input,textarea,[contenteditable],.nlink,.nlink *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.nlink{-webkit-user-select:all;user-select:all}
 img{max-width:100%}
 [hidden]{display:none!important}
 button{touch-action:manipulation}
@@ -3401,7 +3406,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=81; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=82; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4733,6 +4738,10 @@ $('k-file').onchange=function(){
     if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='⚠ Confirmer ?';t=setTimeout(function(){b.classList.remove('arm');b.textContent=lab},3000);return}
     b.classList.remove('arm');b.textContent=lab;$(x[1]).click();
     var r=x[2]==='b'||x[2]==='y'?x[2]+VC[x[2]]:x[2];toast(x[2]==='d'?'Rythmes : piste '+($('dlabel').textContent.replace(/^Piste\s*/,''))+' effacée':rname(r)+' : piste effacée')}});
+/* filet de sécurité : pas de sélection qui démarre hors d'un champ, et une sélection éventuelle disparaît dès qu'on touche */
+document.addEventListener('selectstart',function(e){var t=e.target&&e.target.nodeType===1?e.target:e.target&&e.target.parentNode;if(t&&t.closest&&t.closest('input,textarea,[contenteditable],.nlink'))return;e.preventDefault()},true);
+document.addEventListener('pointerdown',function(e){var t=e.target;if(t&&t.closest&&t.closest('input,textarea,[contenteditable],.nlink'))return;try{var sel=window.getSelection();if(sel&&sel.rangeCount&&!sel.isCollapsed)sel.removeAllRanges()}catch(x){}},true);
+document.addEventListener('contextmenu',function(e){var t=e.target;if(t&&t.closest&&t.closest('.keys,.kgrid,.cpads,.cskins,.steps,.knob,.livebox,.kloop'))e.preventDefault()},true);
 /* ----- TOUT EFFACER : vide les séquences de toutes les pistes (basses 1-3, synthés 1-3, guitare, rythmes A-D), en 16 pas.
    Les sons, presets, pads et boucles du looper sont gardés. Premier appui : confirmation ; ensuite « Annuler » pendant 10 s. ----- */
 var CLRA={arm:0,undo:null,t:0};
