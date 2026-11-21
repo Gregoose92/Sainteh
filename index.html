@@ -3504,7 +3504,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=88; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=89; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4558,6 +4558,8 @@ function loopSvg(pk){
   $('k-full').onclick=function(){mode('full')};$('k-seq').onclick=function(){mode('seq')};
   try{var j=JSON.parse(localStorage.getItem('lst-pads')||'null');if(j&&typeof j==='object'){if(j.b&&!j.b0)j.b0=j.b;if(j.y&&!j.y0)j.y0=j.y; /* pads d'avant : une seule basse et un seul synthé */
     PADG.forEach(function(g){for(var i=0;i<PADN;i++)PADS[g][i]=Array.isArray(j[g])&&j[g][i]?padClean(g,j[g][i]):null})}}catch(e){}
+  /* à l'ouverture, toutes les lignes qui ont des pads démarrent sur le pad vide ∅ : rien ne joue tant qu'on n'a pas lancé un pad */
+  try{PADG.forEach(function(g){if(PADS[g].some(function(d){return !!d})){OFFG[g]=true;OFFQ[g]=false}});setTimeout(function(){try{offUI();padUI()}catch(e){}},0)}catch(e){}
 })();
 
 /* l'état est enregistré avec un léger différé : on le force quand la page est quittée ou mise en arrière-plan */
