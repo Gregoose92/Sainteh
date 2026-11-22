@@ -446,6 +446,7 @@ html.fsl,html.fsl body{overflow:hidden}
 .vback .vtools .btn{font-size:13px;padding:8px 12px}
 .vback .vtools[hidden]{display:none}
 #vb-mute[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+#vb-exp{flex:0 0 auto;font-size:12px!important;padding:8px 10px!important}#vb-exp[hidden]{display:none}
 #vb-paste.undo{background:var(--ink);border-color:var(--ink);color:var(--panel)}
 #vb-clr.arm{background:var(--led);border-color:var(--led);color:#fff}
 /* générateur (et chant) repliés derrière un petit bouton en bas de chaque instrument */
@@ -547,7 +548,7 @@ html.fsl,html.fsl body{overflow:hidden}
       </div>
   </div>
 
-  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span><div class="vtools" id="vtools"><button class="btn" id="vb-mute" type="button" aria-pressed="false">🔇 Mute</button><button class="btn" id="vb-clr" type="button">🗑 Effacer</button><button class="btn" id="vb-copy" type="button">📋 Copier</button><button class="btn" id="vb-paste" type="button" disabled>📥 Coller</button></div></div>
+  <div class="vback" id="vback"><button class="btn" id="vback-b" type="button">← Retour</button><span id="vback-t"></span><button class="btn" id="vb-exp" type="button" hidden title="Exporter cette piste (MIDI ou fichier Saint Teh) pour Saint Teh Studio ou un autre logiciel">⬇ Exporter</button><div class="vtools" id="vtools"><button class="btn" id="vb-mute" type="button" aria-pressed="false">🔇 Mute</button><button class="btn" id="vb-clr" type="button">🗑 Effacer</button><button class="btn" id="vb-copy" type="button">📋 Copier</button><button class="btn" id="vb-paste" type="button" disabled>📥 Coller</button></div></div>
   <section class="zone zn">
     <h2><button class="zt" id="zt-m" aria-expanded="false"><span>À PLUSIEURS</span><i aria-hidden="true"></i></button><div class="lbl nstat" id="n-stat">Solo</div></h2>
     <div class="editor" id="n-solo">
@@ -3515,7 +3516,7 @@ document.addEventListener('keydown',function(e){
 /* Un appareil « hôte » produit tout le son ; les « invités » lui envoient leurs gestes et reçoivent son état.
    Liaison directe entre navigateurs (WebRTC, bibliothèque PeerJS). Le serveur public de PeerJS ne sert qu'à mettre
    les appareils en relation, et de relais quand la liaison directe est impossible. */
-var BUILD=93; /* numéro de version de l'appli : identique à celui de version.json */
+var BUILD=94; /* numéro de version de l'appli : identique à celui de version.json */
 var PROTO=7,PID='lesaintteh-v1-',ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',CODE_RE=/^[A-Z2-9]{5}$/;
 var PLOC={dtune:1,ddec:1,lvol:1,lstart:1,lrate:1}; /* potards qui reflètent la sélection locale : jamais synchronisés tels quels */
 var peer=null,conns=[],hconn=null,ncode='',lastRx=0,dialAt=0,lastS={},lastP={},syncT=0,gT=0,nfiles={},hostTries=0,wl=null;
@@ -4759,7 +4760,7 @@ $('vback-b').onclick=function(){viewOpen('home')};
 /* barre du haut d'un instrument : Mute et Effacer pour ce qu'on édite (la voix ouverte en Pro) */
 var VBC={arm:0,t:0},CLIP={c:null,undo:null,t:0,ut:0};
 function vRow(){return VIEW==='b'||VIEW==='y'?VIEW+VC[VIEW]:VIEW==='g'||VIEW==='d'?VIEW:''}
-function vbackUI(){var r=vRow(),t=$('vtools');t.hidden=!r;if(!r)return;var off=!!OFFG[r]&&!OFFQ[r],pend=!!OFFG[r]&&!!OFFQ[r];
+function vbackUI(){var r=vRow(),t=$('vtools');t.hidden=!r;$('vb-exp').hidden=!(VIEW==='b'||VIEW==='y');if(!r)return;var off=!!OFFG[r]&&!OFFQ[r],pend=!!OFFG[r]&&!!OFFQ[r];
   var m=$('vb-mute');m.setAttribute('aria-pressed',off||pend?'true':'false');m.textContent=pend?'⏳ Revient…':off?'🔊 Réactiver':'🔇 Mute';m.disabled=!can(VIEW);
   var c=$('vb-clr');c.disabled=!can(VIEW);c.classList.toggle('arm',!!VBC.arm);c.textContent=VBC.arm?'⚠ Confirmer ?':'🗑 Effacer';
   var k=$('vb-copy');k.disabled=false;k.textContent=CLIP.c&&CLIP.c.g===VIEW&&CLIP.c.r===r&&CLIP.t>Date.now()?'✔ Copié':'📋 Copier';
@@ -4791,6 +4792,42 @@ $('vb-mute').onclick=function(){var r=vRow();if(!r)return;var v=!OFFG[r]||OFFQ[r
 $('vb-clr').onclick=function(){var r=vRow();if(!r)return;clearTimeout(VBC.t);
   if(!VBC.arm){VBC.arm=1;vbackUI();VBC.t=setTimeout(function(){VBC.arm=0;vbackUI()},3000);return}
   VBC.arm=0;$({b:'b-clr',y:'y-clr',g:'g-clr',d:'d-clr'}[VIEW]).click();kmsg(rname(r)+(VIEW==='d'?' : variation '+D.v+' effacée':' : effacé'));vbackUI()};
+/* ----- EXPORTER UNE SEULE PISTE (une basse ou un synthé) pour Saint Teh Studio (Windows) ou n'importe quel logiciel :
+   - .mid  : les notes (hauteur, durée, accent = vélocité forte, slide = notes qui se chevauchent), au tempo du morceau
+   - .json : les mêmes notes + tout le son (réglages, preset, forme d'onde) au format « le-saint-teh / piste » ----- */
+function trkNotes(g){var p=g==='b'?pat:Y.pat,L=g==='b'?BL:Y.len,out=[],frac=g==='b'?.55:.8,
+    base=g==='b'?36+tuneOf(P.tune):48+12*Math.round((P.yoct-.5)*4),ch=g==='y'?(YCH[Y.chord]||[0,0]):[0,0];
+  for(var i=0;i<L;i++){var st=p[i];if(!st||st.g!==1)continue;var k=1;while(i+k<L&&p[i+k].g===2)k++;
+    var nx=p[(i+k)%L],slide=g==='b'&&!!st.s&&i+k<L&&nx.g===1,len=slide?k+.1:k-1+frac,m=base+st.n+12*st.o;
+    [0].concat(ch).forEach(function(iv,j){if(j>0&&(iv===0||ch.indexOf(iv)<j-1))return;var mm=Math.max(0,Math.min(127,m+iv));
+      out.push({step:i,len:+len.toFixed(3),midi:mm,vel:st.a?120:88,accent:!!st.a,slide:slide,chord:j>0})})}
+  return {notes:out,steps:L}}
+function asc(x){return String(x).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e]/g,'')}
+function midiFile(name,bpm,notes,L){var PPQ=96,SPT=PPQ/4,ev=[];
+  notes.forEach(function(n){var a=Math.round(n.step*SPT),b=Math.max(a+1,Math.round((n.step+n.len)*SPT));ev.push([a,1,n.midi,n.vel]);ev.push([b,0,n.midi,0])});
+  ev.sort(function(x,y){return x[0]-y[0]||x[1]-y[1]});
+  function vlq(v){var o=[v&127];while(v>>=7)o.unshift((v&127)|128);return o}
+  var trk=[],t=0,us=Math.round(60000000/bpm),nm=asc(name);
+  trk.push.apply(trk,[0,255,3].concat(vlq(nm.length),nm.split('').map(function(c){return c.charCodeAt(0)})));
+  trk.push(0,255,81,3,(us>>16)&255,(us>>8)&255,us&255,0,255,88,4,4,2,24,8);
+  ev.forEach(function(e){trk.push.apply(trk,vlq(e[0]-t));t=e[0];trk.push(e[1]?0x90:0x80,e[2],e[3])});
+  trk.push.apply(trk,vlq(Math.max(0,L*SPT-t)).concat([255,47,0])); /* fin du clip = fin du motif, même s'il finit par des silences */
+  var h=[77,84,104,100,0,0,0,6,0,0,0,1,0,PPQ],l=trk.length;
+  return new Uint8Array(h.concat([77,84,114,107,(l>>>24)&255,(l>>16)&255,(l>>8)&255,l&255],trk))}
+function fileOut(blob,name,title){var file=null;try{file=new File([blob],name,{type:blob.type})}catch(e){}
+  function dl(){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},4000);kmsg('Fichier enregistré : '+name)}
+  var cs=false;try{cs=!!(file&&navigator.canShare&&navigator.canShare({files:[file]}))}catch(e){}
+  if(cs)navigator.share({files:[file],title:title}).catch(function(e){if(!e||e.name!=='AbortError')dl()});else dl()}
+$('vb-exp').onclick=function(){var g=VIEW;if(g!=='b'&&g!=='y')return;var r=vRow(),nm=rname(r),bpm=bpmOf(P.tempo),tn=trkNotes(g);
+  if(!tn.notes.length){kmsg(nm+' : aucune note à exporter');return}
+  var base='SaintTeh_'+asc(nm).replace(/\s+/g,'-')+'_'+bpm+'bpm_'+bankStamp(new Date());
+  bankDlg('Exporter '+nm,tn.notes.length+' note'+(tn.notes.length>1?'s':'')+' sur '+tn.steps+' pas, à '+bpm+' BPM. MIDI : les notes seules, au tempo, pour tout logiciel de musique (FL Studio, Ableton…). Notes + son : le même motif avec tous les réglages et le preset, pour Saint Teh Studio.',[
+    {t:'🎹 MIDI (.mid)',primary:true,f:function(){fileOut(new Blob([midiFile('Le Saint Teh - '+nm,bpm,tn.notes,tn.steps)],{type:'audio/midi'}),base+'.mid','Le Saint Teh : '+nm+' (MIDI)')}},
+    {t:'🎛 Notes + son (.json)',f:function(){var c=clipGet(g);var j={app:'le-saint-teh',kind:'piste',v:1,build:BUILD,date:new Date().toISOString(),
+        type:g==='b'?'basse':'synthe',name:nm,bpm:bpm,steps:tn.steps,stepsPerBeat:4,shuffle:+P.shuffle.toFixed(3),
+        notes:tn.notes,son:{sections:c.sec,potards:c.kn},note:'Pas = double-croche. midi 60 = Do central. vel 120 = accent. slide = la note glisse vers la suivante.'};
+      fileOut(new Blob([JSON.stringify(j,null,1)],{type:'application/json'}),base+'.json','Le Saint Teh : '+nm)}},
+    {t:'Annuler'}])};
 /* sur chaque tuile : quel pad joue sur chaque ligne (P1…P8), ∅ = pad vide, « libre » = motif modifié qui n'est dans aucun pad */
 function ipadsUI(k){var box=$('it-'+k+'-p');if(!box)return;
   var rows=k==='d'||k==='g'?[k]:ROOKIE?[k+'0']:[k+'0',k+'1',k+'2'],h='';
